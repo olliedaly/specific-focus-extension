@@ -27,90 +27,165 @@ function injectModalStyles() {
 
     const css = `
         #${FOCUS_MODAL_ID} {
+            /* Raindrop.io Inspired - Earthy/Neutral Tones */
+            --rui-bg-primary: #F7F5F2;
+            --rui-bg-card: #FFFFFF;
+            --rui-bg-input: #FFFFFF;
+            --rui-text-primary: #3A2F28;
+            --rui-text-secondary: #7A6B60;
+            --rui-accent-green: #6A8A7B;
+            --rui-accent-green-hover: #597567;
+            --rui-accent-green-text: #FFFFFF;
+            --rui-focus-green: rgba(106, 138, 123, 0.25);
+            --rui-accent-danger: #D47E64;
+            --rui-accent-danger-hover: #BF6A51;
+            --rui-accent-danger-text: #FFFFFF;
+            --rui-focus-danger: rgba(212, 126, 100, 0.3);
+            --rui-border-primary: #E0D8CF;
+            --rui-border-input: #C9BFB6;
+            --rui-border-input-focus: var(--rui-accent-green);
+            --font-family-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --border-radius-sm: 0.25rem; /* 4px */
+            --border-radius-md: 0.375rem; /* 6px */
+            --shadow-subtle: 0 2px 4px rgba(74, 59, 49, 0.06);
+            --shadow-strong: 0 4px 12px rgba(74, 59, 49, 0.12);
+            --transition-common: 0.2s ease-in-out;
+
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(58, 47, 40, 0.6); /* Darker brown overlay, more opacity */
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
-            z-index: 2147483647; /* Max z-index */
+            z-index: 2147483647;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-family: Arial, sans-serif;
+            font-family: var(--font-family-main);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity var(--transition-common), visibility 0s linear var(--transition-common);
+        }
+        #${FOCUS_MODAL_ID}.visible {
+            opacity: 1;
+            visibility: visible;
+            transition: opacity var(--transition-common), visibility 0s linear 0s;
         }
         .${FOCUS_MODAL_ID}-content {
-            background-color: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 450px;
+            background-color: var(--rui-bg-card);
+            padding: 20px 24px;
+            border-radius: var(--border-radius-md);
+            box-shadow: var(--shadow-strong);
+            text-align: left; /* Align text to left for content */
+            max-width: 420px; /* Raindrop modals are often not too wide */
             width: 90%;
+            border: 1px solid var(--rui-border-primary);
+            transform: scale(0.95) translateY(10px);
+            transition: transform var(--transition-common) cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity var(--transition-common);
+        }
+        #${FOCUS_MODAL_ID}.visible .${FOCUS_MODAL_ID}-content {
+            transform: scale(1) translateY(0);
+            opacity: 1;
         }
         .${FOCUS_MODAL_ID}-content h2 {
             margin-top: 0;
-            color: #333;
-            font-size: 22px;
+            color: var(--rui-text-primary);
+            font-size: 1.125rem; /* 18px */
+            font-weight: 600;
+            margin-bottom: 8px;
         }
         .${FOCUS_MODAL_ID}-content p {
-            color: #555;
-            font-size: 16px;
-            margin: 15px 0;
+            color: var(--rui-text-secondary);
+            font-size: 0.875rem; /* 14px */
+            line-height: 1.6;
+            margin: 0 0 16px 0;
         }
         .${FOCUS_MODAL_ID}-content .quote {
             font-style: italic;
-            color: #777;
-            margin-bottom: 25px;
-            font-size: 15px;
+            color: var(--rui-text-secondary);
+            margin: 16px 0;
+            font-size: 0.875rem;
+            padding: 10px 12px;
+            background-color: var(--rui-bg-primary);
+            border-left: 3px solid var(--rui-accent-green);
+            border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
+        }
+        .${FOCUS_MODAL_ID}-content .button-container {
+            margin-top: 20px;
+            display: flex;
+            /* Default: stacked. To make them side-by-side and to the right: */
+            /* flex-direction: row; */
+            /* justify-content: flex-end; */ 
+            gap: 10px;
+            flex-direction: column; /* Keep stacked for now, common in modals */
         }
         .${FOCUS_MODAL_ID}-content button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid transparent;
+            border-radius: var(--border-radius-sm);
             cursor: pointer;
-            font-size: 16px;
-            margin: 5px;
-            transition: background-color 0.3s ease;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: background-color var(--transition-common), border-color var(--transition-common), color var(--transition-common), transform 0.1s ease;
+            text-align: center;
+        }
+        .${FOCUS_MODAL_ID}-content button:active {
+            transform: scale(0.98);
         }
         .${FOCUS_MODAL_ID}-dismiss-btn {
-            background-color: #f44336;
-            color: white;
+            background-color: var(--rui-bg-input); /* More subtle dismiss */
+            border-color: var(--rui-border-input);
+            color: var(--rui-text-secondary);
         }
         .${FOCUS_MODAL_ID}-dismiss-btn:hover {
-            background-color: #d32f2f;
+            background-color: var(--rui-border-primary);
+            color: var(--rui-text-primary);
         }
         .${FOCUS_MODAL_ID}-whitelist-btn {
-            background-color: #4CAF50;
-            color: white;
+            background-color: var(--rui-accent-green);
+            border-color: var(--rui-accent-green);
+            color: var(--rui-accent-green-text);
         }
         .${FOCUS_MODAL_ID}-whitelist-btn:hover {
-            background-color: #388E3C;
+            background-color: var(--rui-accent-green-hover);
+            border-color: var(--rui-accent-green-hover);
         }
         .${FOCUS_MODAL_ID}-goback-btn {
-            background-color: #007bff;
-            color: white;
+            background-color: var(--rui-bg-input); /* More subtle */
+            border-color: var(--rui-border-input);
+            color: var(--rui-text-secondary);
         }
         .${FOCUS_MODAL_ID}-goback-btn:hover {
-            background-color: #0056b3;
+            background-color: var(--rui-border-primary);
+            color: var(--rui-text-primary);
         }
     `;
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = css;
     document.head.appendChild(style);
+
+    // Trigger fade-in animation
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => { // Double requestAnimationFrame for some browsers
+            overlay.classList.add('visible');
+        });
+    });
 }
 
 function removeOffFocusModal() {
     const existingModal = document.getElementById(FOCUS_MODAL_ID);
     if (existingModal) {
+        console.log("Content.js: Removing existing off-focus modal.");
         existingModal.remove();
     }
 }
 
 function showOffFocusModal(lastRelevantUrl) {
+    console.log("Content.js: showOffFocusModal called. lastRelevantUrl:", lastRelevantUrl);
     removeOffFocusModal(); // Remove any existing modal first
 
     const overlay = document.createElement('div');
@@ -128,6 +203,7 @@ function showOffFocusModal(lastRelevantUrl) {
     quoteElement.textContent = randomQuote;
 
     const buttonContainer = document.createElement('div'); // Container for buttons
+    buttonContainer.className = 'button-container'; // Add class for styling
 
     if (lastRelevantUrl && typeof lastRelevantUrl === 'string' && lastRelevantUrl.trim() !== '') {
         const goBackButton = document.createElement('button');
@@ -162,7 +238,21 @@ function showOffFocusModal(lastRelevantUrl) {
     buttonContainer.appendChild(whitelistButton);
 
     overlay.appendChild(modalContent);
-    document.body.appendChild(overlay);
+    console.log("Content.js: Modal HTML constructed, attempting to append to body.");
+    try {
+        document.body.appendChild(overlay);
+        console.log("Content.js: Modal appended to body.");
+    } catch (e) {
+        console.error("Content.js: Error appending modal to body:", e);
+        return; // Stop if appending failed
+    }
+
+    // Trigger fade-in animation
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => { // Double requestAnimationFrame for some browsers
+            overlay.classList.add('visible');
+        });
+    });
 }
 
 // Call injectModalStyles once when the script loads

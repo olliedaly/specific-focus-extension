@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "Focus Monitor Pro",
+    "name": "Specific Focus",
     "version": "0.2.0",
     "description": "Monitors web pages for relevance to your current focus, with advanced SPA support.",
     "permissions": [
@@ -8,7 +8,9 @@
       "tabs",
       "scripting",
       "activeTab",
-      "webNavigation"
+      "webNavigation",
+      "alarms",
+      "notifications"
     ],
     "host_permissions": [
       "http://*/*",

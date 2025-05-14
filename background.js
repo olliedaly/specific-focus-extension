@@ -10,23 +10,58 @@ let lastRelevantUrl = null;
 const STICKY_RELEVANT_DURATION = 7000; // 7 seconds
 let recentAssessmentsCache = {}; // In-memory cache: { url: { assessment: "Relevant", timestamp: Date.now() } }
 
+// Session Timer State Keys
+const SESSION_START_TIME_KEY = 'sessionStartTime';
+const IS_SESSION_PAUSED_KEY = 'isSessionPaused';
+const PAUSED_ELAPSED_TIME_KEY = 'pausedElapsedTime';
+const DAILY_TOTAL_FOCUS_KEY_PREFIX = 'dailyTotalFocusTime_'; // New
+
+// Pomodoro State Keys
+const POMODORO_ENABLED_KEY = 'pomodoroEnabled';
+const POMODORO_WORK_DURATION_KEY = 'pomodoroWorkDuration';
+const POMODORO_BREAK_DURATION_KEY = 'pomodoroBreakDuration';
+const POMODORO_CURRENT_MODE_KEY = 'pomodoroCurrentMode'; // "work" | "break"
+const POMODORO_CYCLE_END_TIME_KEY = 'pomodoroCycleEndTime';
+const POMODORO_ALARM_NAME_WORK = 'pomodoroWorkAlarm';
+const POMODORO_ALARM_NAME_BREAK = 'pomodoroBreakAlarm';
+
 console.log("Background.js: Script loaded/reloaded. Initializing...");
 
-// Load initial lastRelevantUrl from storage
-chrome.storage.local.get(LAST_RELEVANT_URL_KEY, (result) => {
+// Helper function to get today's date string for storage key
+function getTodayDateString() {
+    return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+// Function to update daily total focus time
+async function updateDailyTotalFocusTime(durationToAdd) {
+    if (durationToAdd <= 0) return;
+
+    const todayKey = DAILY_TOTAL_FOCUS_KEY_PREFIX + getTodayDateString();
+    try {
+        const result = await chrome.storage.local.get(todayKey);
+        const currentDailyTotal = result[todayKey] || 0;
+        const newDailyTotal = currentDailyTotal + durationToAdd;
+        await chrome.storage.local.set({ [todayKey]: newDailyTotal });
+        console.log(`Background: Updated daily total focus time. Added ${durationToAdd/1000}s. New total for ${todayKey}: ${newDailyTotal/1000}s`);
+    } catch (e) {
+        console.error("Background: Error updating daily total focus time:", e);
+    }
+}
+
+// Load initial states from storage
+chrome.storage.local.get([LAST_RELEVANT_URL_KEY, 'sessionFocus', SESSION_START_TIME_KEY, IS_SESSION_PAUSED_KEY, PAUSED_ELAPSED_TIME_KEY], (result) => {
     if (result[LAST_RELEVANT_URL_KEY]) {
         lastRelevantUrl = result[LAST_RELEVANT_URL_KEY];
         console.log("Background: Loaded lastRelevantUrl on init:", lastRelevantUrl);
     }
-});
-
-chrome.storage.local.get('sessionFocus', (result) => {
     if (result.sessionFocus) {
         currentSessionFocus = result.sessionFocus;
         console.log("Background: Session focus loaded on init:", currentSessionFocus);
+        // If session was active, also load timer states - popup will handle display
+        // console.log("Background: Active session detected on init, timer states from storage:", 
+        //     result[SESSION_START_TIME_KEY], result[IS_SESSION_PAUSED_KEY], result[PAUSED_ELAPSED_TIME_KEY]);
     } else {
         console.log("Background: No session focus found on init.");
-        // Ensure default icon is set if no focus
         try {
             chrome.action.setIcon({ path: "icons/icon48.png" });
         } catch (e) {
@@ -36,21 +71,26 @@ chrome.storage.local.get('sessionFocus', (result) => {
 });
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'local' && changes.sessionFocus) {
-        currentSessionFocus = changes.sessionFocus.newValue;
-        console.log("Background: Session focus changed via storage to:", currentSessionFocus);
-        if (!currentSessionFocus) {
-            console.log("Background: Session ended. Resetting icon and clearing processed URL cache.");
-            try {
-                chrome.action.setIcon({ path: "icons/icon48.png" });
-            } catch (e) {
-                console.error("Background.js: Error setting icon on session end:", e);
+    if (namespace === 'local') {
+        if (changes.sessionFocus) {
+            currentSessionFocus = changes.sessionFocus.newValue;
+            console.log("Background: Session focus changed via storage to:", currentSessionFocus);
+            if (!currentSessionFocus) {
+                console.log("Background: Session ended (detected by sessionFocus change). Clearing related states.");
+                try {
+                    chrome.action.setIcon({ path: "icons/icon48.png" });
+                } catch (e) {
+                    console.error("Background.js: Error setting icon on session end:", e);
+                }
+                lastProcessedUrlTimestamp = {};
+                currentlyProcessingUrl = {};
+                lastRelevantUrl = null; // Clear in-memory last relevant URL
+                recentAssessmentsCache = {}; // Clear sticky cache
+                // Timer states are primarily managed via messages, but good to ensure consistency if needed
+            } else {
+                console.log("Background: Session started or focus changed. Triggering analysis for current tab.");
+                triggerCurrentTabAnalysis("SESSION_RESTARTED_OR_FOCUS_CHANGED");
             }
-            lastProcessedUrlTimestamp = {};
-            currentlyProcessingUrl = {};
-        } else {
-            console.log("Background: Session started or focus changed. Triggering analysis for current tab.");
-            triggerCurrentTabAnalysis("SESSION_RESTARTED_OR_FOCUS_CHANGED");
         }
     }
 });
@@ -96,10 +136,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
     } else if (message.type === "SESSION_STARTED") {
         console.log("Background: SESSION_STARTED message received from popup. Focus:", message.focus);
-        triggerCurrentTabAnalysis("SESSION_STARTED_POPUP");
+        const todayKey = DAILY_TOTAL_FOCUS_KEY_PREFIX + getTodayDateString();
+        
+        // Check if it's a new day compared to the last stored daily total to reset if necessary
+        // This part is optional if we only care about accumulating for the current day string
+        // For simplicity, we just start or continue today's count.
+
+        chrome.storage.local.set({
+            [SESSION_START_TIME_KEY]: Date.now(),
+            [IS_SESSION_PAUSED_KEY]: false,
+            [PAUSED_ELAPSED_TIME_KEY]: 0,
+            sessionFocus: message.focus, 
+            lastAssessmentText: null, 
+            [LAST_RELEVANT_URL_KEY]: null 
+            // Today's total time will be updated on pause/end
+        }, () => {
+            console.log("Background: Session timer states initialized for focus:", message.focus);
+            triggerCurrentTabAnalysis("SESSION_STARTED_POPUP");
+        });
     } else if (message.type === "SESSION_ENDED") {
         console.log("Background: SESSION_ENDED message received from popup.");
-        // State reset handled by storage.onChanged
+        // Calculate final segment duration and add to daily total before clearing states
+        chrome.storage.local.get([SESSION_START_TIME_KEY, IS_SESSION_PAUSED_KEY, PAUSED_ELAPSED_TIME_KEY], (result) => {
+            if (!result[IS_SESSION_PAUSED_KEY] && result[SESSION_START_TIME_KEY]) {
+                const finalSegmentDuration = Date.now() - result[SESSION_START_TIME_KEY];
+                updateDailyTotalFocusTime(finalSegmentDuration); // Update daily total
+            }
+            // else if it was paused, the last segment was already added by PAUSE_SESSION
+            
+            // Clear in-memory states
+            currentSessionFocus = null;
+            lastRelevantUrl = null;
+            recentAssessmentsCache = {};
+            // Popup.js handles removing sessionFocus, lastAssessmentText, lastRelevantUrlForFocus, focusWhitelist,
+            // sessionStartTime, isSessionPaused, pausedElapsedTime from storage.
+        });
     } else if (message.type === "ADD_TO_WHITELIST") {
         if (message.url) {
             console.log(`Background: ADD_TO_WHITELIST message received for URL: ${message.url}`);
@@ -107,11 +178,143 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
             console.warn("Background: ADD_TO_WHITELIST message received without URL.");
         }
+    } else if (message.type === "PAUSE_SESSION") {
+        console.log("Background: PAUSE_SESSION message received.");
+        chrome.storage.local.get([SESSION_START_TIME_KEY, PAUSED_ELAPSED_TIME_KEY, IS_SESSION_PAUSED_KEY], (result) => {
+            if (!result[IS_SESSION_PAUSED_KEY] && result[SESSION_START_TIME_KEY]) { 
+                const currentSegmentElapsed = Date.now() - result[SESSION_START_TIME_KEY];
+                const newPausedElapsedTime = (result[PAUSED_ELAPSED_TIME_KEY] || 0) + currentSegmentElapsed;
+                
+                updateDailyTotalFocusTime(currentSegmentElapsed); // Update daily total for the segment just ended
+
+                chrome.storage.local.set({
+                    [IS_SESSION_PAUSED_KEY]: true,
+                    [PAUSED_ELAPSED_TIME_KEY]: newPausedElapsedTime
+                }, () => {
+                    console.log("Background: Session paused. Total elapsed so far:", newPausedElapsedTime / 1000, "seconds.");
+                    if (sendResponse) sendResponse({status: "paused", pausedTime: newPausedElapsedTime});
+                });
+            } else {
+                if (sendResponse) sendResponse({status: "already_paused_or_no_session"});
+            }
+        });
+        return true; 
+    } else if (message.type === "RESUME_SESSION") {
+        console.log("Background: RESUME_SESSION message received.");
+        chrome.storage.local.get(IS_SESSION_PAUSED_KEY, (result) => {
+            if (result[IS_SESSION_PAUSED_KEY]) { // Only resume if paused
+                chrome.storage.local.set({
+                    [IS_SESSION_PAUSED_KEY]: false,
+                    [SESSION_START_TIME_KEY]: Date.now() // Reset start time for the new active segment
+                }, () => {
+                    console.log("Background: Session resumed.");
+                    if (sendResponse) sendResponse({status: "resumed"});
+                });
+            } else {
+                 if (sendResponse) sendResponse({status: "not_paused"});
+            }
+        });
+        return true; // Indicate async response
+    } else if (message.type === "START_POMODORO_CYCLE") {
+        console.log("Background: START_POMODORO_CYCLE received", message);
+        const { workDuration, breakDuration } = message;
+        chrome.storage.local.set({
+            [POMODORO_ENABLED_KEY]: true,
+            [POMODORO_WORK_DURATION_KEY]: workDuration,
+            [POMODORO_BREAK_DURATION_KEY]: breakDuration,
+            [POMODORO_CURRENT_MODE_KEY]: "work",
+            [POMODORO_CYCLE_END_TIME_KEY]: Date.now() + (workDuration * 60000)
+        }, () => {
+            chrome.alarms.create(POMODORO_ALARM_NAME_WORK, { delayInMinutes: workDuration });
+            console.log(`Background: Pomodoro work cycle started for ${workDuration} min.`);
+            if (sendResponse) sendResponse({status: "pomodoro_started", mode: "work", endTime: Date.now() + (workDuration * 60000) });
+        });
+        return true; // Indicate async response
+    } else if (message.type === "STOP_POMODORO_CYCLE") {
+        console.log("Background: STOP_POMODORO_CYCLE received");
+        chrome.alarms.clear(POMODORO_ALARM_NAME_WORK);
+        chrome.alarms.clear(POMODORO_ALARM_NAME_BREAK);
+        chrome.storage.local.set({
+            [POMODORO_ENABLED_KEY]: false,
+            [POMODORO_CURRENT_MODE_KEY]: null,
+            [POMODORO_CYCLE_END_TIME_KEY]: null
+            // Keep durations for next time user enables it
+        }, () => {
+            console.log("Background: Pomodoro cycle stopped.");
+            if (sendResponse) sendResponse({status: "pomodoro_stopped"});
+        });
+        return true; // Indicate async response
     }
-    return true; // Keep true if any path might use sendResponse asynchronously.
-                 // For ADD_TO_WHITELIST, if we made addToWhitelist async and awaited it here,
-                 // and then called sendResponse, it would be fine.
-                 // If not using sendResponse for this new type, can be more selective.
+    return true; 
+});
+
+// Pomodoro Alarm Handler
+chrome.alarms.onAlarm.addListener((alarm) => {
+    console.log("Background: Pomodoro alarm fired!", alarm);
+    chrome.storage.local.get([
+        POMODORO_ENABLED_KEY, 
+        POMODORO_WORK_DURATION_KEY, 
+        POMODORO_BREAK_DURATION_KEY, 
+        POMODORO_CURRENT_MODE_KEY
+    ], (result) => {
+        if (!result[POMODORO_ENABLED_KEY]) {
+            console.log("Background: Pomodoro alarm fired but Pomodoro is not enabled. Clearing alarms.");
+            chrome.alarms.clear(POMODORO_ALARM_NAME_WORK);
+            chrome.alarms.clear(POMODORO_ALARM_NAME_BREAK);
+            return;
+        }
+
+        let nextMode = null;
+        let nextDuration = 0;
+        let nextAlarmName = null;
+        let notificationMessage = "";
+
+        if (alarm.name === POMODORO_ALARM_NAME_WORK && result[POMODORO_CURRENT_MODE_KEY] === "work") {
+            nextMode = "break";
+            nextDuration = result[POMODORO_BREAK_DURATION_KEY];
+            nextAlarmName = POMODORO_ALARM_NAME_BREAK;
+            notificationMessage = `Work cycle finished! Time for a ${nextDuration}-minute break.`;
+        } else if (alarm.name === POMODORO_ALARM_NAME_BREAK && result[POMODORO_CURRENT_MODE_KEY] === "break") {
+            nextMode = "work";
+            nextDuration = result[POMODORO_WORK_DURATION_KEY];
+            nextAlarmName = POMODORO_ALARM_NAME_WORK;
+            notificationMessage = `Break finished! Time for a ${nextDuration}-minute work session.`;
+        }
+
+        if (nextMode && nextAlarmName && nextDuration > 0) {
+            console.log(`Background: Pomodoro transitioning to ${nextMode} for ${nextDuration} min.`);
+            chrome.storage.local.set({
+                [POMODORO_CURRENT_MODE_KEY]: nextMode,
+                [POMODORO_CYCLE_END_TIME_KEY]: Date.now() + (nextDuration * 60000)
+            }, () => {
+                chrome.alarms.create(nextAlarmName, { delayInMinutes: nextDuration });
+                
+                // Notify popup about mode change (optional, popup can also poll or listen to storage)
+                chrome.runtime.sendMessage({
+                    type: "POMODORO_MODE_CHANGED", 
+                    mode: nextMode, 
+                    endTime: Date.now() + (nextDuration * 60000)
+                }).catch(e => console.log("Error sending POMODORO_MODE_CHANGED to popup:", e.message));
+
+                // Simple notification (requires "notifications" permission in manifest)
+                // chrome.notifications.create({
+                //     type: "basic",
+                //     iconUrl: "icons/icon128.png",
+                //     title: "Specific Focus - Pomodoro",
+                //     message: notificationMessage
+                // });
+            });
+        } else {
+            console.log("Background: Pomodoro alarm fired but state is inconsistent or duration is zero. Stopping cycle.");
+            chrome.alarms.clear(POMODORO_ALARM_NAME_WORK);
+            chrome.alarms.clear(POMODORO_ALARM_NAME_BREAK);
+            chrome.storage.local.set({
+                [POMODORO_ENABLED_KEY]: false,
+                [POMODORO_CURRENT_MODE_KEY]: null,
+                [POMODORO_CYCLE_END_TIME_KEY]: null
+            });
+        }
+    });
 });
 
 // Helper function to get the whitelist

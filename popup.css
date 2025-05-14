@@ -1,80 +1,322 @@
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-  width: 320px;
-  padding: 15px;
-  background-color: #f9f9f9;
-  color: #333;
+:root {
+  /* Raindrop.io Inspired - Earthy/Neutral Tones */
+  --rui-bg-primary: #F7F5F2;         /* Very light, warm off-white/beige for main background */
+  --rui-bg-card: #FFFFFF;           /* Clean white for cards/sections */
+  --rui-bg-input: #FFFFFF;          /* White for input fields */
+  --rui-bg-input-hover: #FDFBF8;  /* Slightly off-white for input hover */
+
+  --rui-text-primary: #3A2F28;      /* Dark, rich brown - slightly darker */
+  --rui-text-secondary: #7A6B60;    /* Softer, desaturated brown */
+  --rui-text-placeholder: #A8998E;  /* Lighter for placeholders */
+  
+  --rui-accent-green: #6A8A7B;      /* Calm, earthy green for primary actions */
+  --rui-accent-green-hover: #597567;
+  --rui-accent-green-text: #FFFFFF; /* Text on green accent */
+  --rui-focus-green: rgba(106, 138, 123, 0.25);
+
+  --rui-accent-danger: #D47E64;     /* Muted terracotta/red */
+  --rui-accent-danger-hover: #BF6A51;
+  --rui-accent-danger-text: #FFFFFF;
+  --rui-focus-danger: rgba(212, 126, 100, 0.3);
+
+  --rui-border-primary: #E0D8CF;    /* Soft border for cards/dividers */
+  --rui-border-input: #C9BFB6;      /* Slightly darker for input default state */
+  --rui-border-input-focus: var(--rui-accent-green);
+
+  --font-family-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --border-radius-sm: 0.25rem; /* 4px */
+  --border-radius-md: 0.375rem; /* 6px */
+  --shadow-subtle: 0 2px 4px rgba(74, 59, 49, 0.06);
+  --shadow-strong: 0 4px 12px rgba(74, 59, 49, 0.12);
+  --transition-common: 0.2s ease-in-out;
 }
 
-h1 {
-  font-size: 1.3em;
-  color: #2c3e50;
+body {
+  font-family: var(--font-family-main);
+  width: 300px;
+  margin: 0;
+  background-color: var(--rui-bg-primary);
+  color: var(--rui-text-primary);
+  font-size: 14px; /* Common base for UIs like Raindrop */
+}
+
+.popup-container {
+  padding: 16px;
+}
+
+header h1 {
+  font-size: 1.25rem; /* 20px */
+  font-weight: 600;
+  color: var(--rui-text-primary);
   text-align: center;
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
-input[type="text"] {
-  width: calc(100% - 22px); /* Account for padding and border */
-  padding: 10px;
+.session-control, .session-active-view {
+  background-color: var(--rui-bg-card);
+  padding: 16px;
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-subtle);
+  margin-bottom: 16px;
+  border: 1px solid var(--rui-border-primary);
+}
+
+input[type="text"]#focusPrompt {
+  width: 100%;
+  padding: 10px 12px;
   margin-bottom: 10px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  border: 1px solid var(--rui-border-input);
+  border-radius: var(--border-radius-sm);
   box-sizing: border-box;
-  font-size: 0.95em;
-}
-input[type="text"]:focus {
-  border-color: #3498db;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+  font-size: 0.95rem; /* 15.2px */
+  background-color: var(--rui-bg-input);
+  color: var(--rui-text-primary);
+  transition: border-color var(--transition-common), box-shadow var(--transition-common);
 }
 
+input[type="text"]#focusPrompt::placeholder {
+  color: var(--rui-text-placeholder);
+}
+
+input[type="text"]#focusPrompt:hover {
+    border-color: var(--rui-text-secondary);
+}
+
+input[type="text"]#focusPrompt:focus {
+  border-color: var(--rui-border-input-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--rui-focus-green);
+}
+
+input[type="text"]#focusPrompt.input-error-temp {
+    border-color: var(--rui-accent-danger) !important;
+    box-shadow: 0 0 0 3px var(--rui-focus-danger) !important;
+}
+input[type="text"]#focusPrompt.input-error-temp::placeholder {
+    color: var(--rui-accent-danger);
+}
 
 button {
   width: 100%;
-  padding: 10px 15px;
-  margin-bottom: 12px;
-  border: none;
-  border-radius: 5px;
+  padding: 10px 14px;
+  border: 1px solid transparent; /* For consistent height, can be colored for secondary */
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
-  font-weight: bold;
-  font-size: 0.95em;
-  transition: background-color 0.2s ease;
+  font-weight: 500;
+  font-size: 0.9rem; /* 14.4px */
+  transition: background-color var(--transition-common), border-color var(--transition-common), color var(--transition-common), transform 0.1s ease;
+  text-align: center;
+}
+
+button:focus {
+  outline: none;
+}
+button:active {
+    transform: scale(0.98);
 }
 
 #startSession {
-  background-color: #2ecc71; /* Green */
-  color: white;
+  background-color: var(--rui-accent-green);
+  border-color: var(--rui-accent-green);
+  color: var(--rui-accent-green-text);
+  margin-bottom: 0;
+  font-weight: 600;
 }
 #startSession:hover {
-  background-color: #27ae60;
+  background-color: var(--rui-accent-green-hover);
+  border-color: var(--rui-accent-green-hover);
+}
+#startSession:focus {
+  box-shadow: 0 0 0 3px var(--rui-focus-green);
 }
 
+
 #endSession {
-  background-color: #e74c3c; /* Red */
-  color: white;
+  background-color: transparent;
+  color: var(--rui-accent-danger);
+  border: 1px solid var(--rui-border-input); /* Subtle border for secondary action */
+  margin-top: 12px; 
 }
 #endSession:hover {
-  background-color: #c0392b;
+  background-color: var(--rui-accent-danger);
+  color: var(--rui-accent-danger-text);
+  border-color: var(--rui-accent-danger);
+}
+#endSession:focus {
+   box-shadow: 0 0 0 3px var(--rui-focus-danger);
+   border-color: var(--rui-accent-danger);
+}
+
+#pauseSessionButton {
+  background-color: var(--rui-text-secondary); /* Neutral/secondary color */
+  color: var(--rui-bg-primary);
+  margin-top: 12px;
+  border: 1px solid var(--rui-text-secondary);
+}
+#pauseSessionButton:hover {
+  background-color: var(--rui-text-primary);
+  border-color: var(--rui-text-primary);
+}
+#pauseSessionButton:focus {
+  box-shadow: 0 0 0 3px rgba(122, 107, 96, 0.3); /* Focus ring for pause button */
+  border-color: var(--rui-text-primary);
 }
 
 #status {
-  font-size: 0.9em;
-  color: #555;
+  font-size: 0.875rem; /* 14px */
+  color: var(--rui-text-secondary);
   margin-bottom: 8px;
   text-align: center;
-  min-height: 1.2em; /* Prevent layout shift */
+  min-height: 1.2em; 
   word-wrap: break-word;
 }
 
-#relevance {
-  font-size: 1em;
-  font-weight: bold;
-  color: #333;
+#sessionTimer {
+  font-size: 1.4rem; /* Larger for timer */
+  font-weight: 600;
+  color: var(--rui-text-primary);
   text-align: center;
-  padding: 10px;
-  border-radius: 5px;
-  background-color: #ecf0f1; /* Light grey */
-  min-height: 1.5em; /* Prevent layout shift */
-  margin-top: 5px;
+  margin: 8px 0 12px 0;
+  padding: 8px;
+  background-color: var(--rui-bg-input); /* Subtle background */
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--rui-border-primary);
+}
+
+#relevance {
+  font-size: 0.9rem; /* 14.4px */
+  font-weight: 500;
+  text-align: center;
+  padding: 8px 10px;
+  border-radius: var(--border-radius-sm);
+  background-color: var(--rui-bg-input);
+  min-height: 1.5em; 
+  margin-top: 4px;
+  border: 1px solid var(--rui-border-primary);
+  transition: background-color var(--transition-common), border-color var(--transition-common), color var(--transition-common);
+  color: var(--rui-text-primary);
+}
+
+/* Relevance status styling */
+#relevance.relevant {
+  background-color: #E6F3E4; /* Softer green derived from accent */
+  border-color: var(--rui-accent-green);
+  color: var(--rui-accent-green-hover); 
+}
+
+#relevance.irrelevant {
+  background-color: #FBEEEA; /* Softer red/terracotta derived */
+  border-color: var(--rui-accent-danger);
+  color: var(--rui-accent-danger-hover);
+}
+
+#relevance.error {
+  background-color: #FFF8E1; /* Light, soft yellow */
+  border-color: #FFC107; /* Amber for error border */
+  color: #B38600; /* Darker yellow text */
+}
+
+#dailyTotalDisplay {
+  font-size: 0.8rem; /* Smaller than main status */
+  color: var(--rui-text-secondary);
+  text-align: center;
+  margin-top: -1.25rem; /* Pull it up a bit under the main title */
+  margin-bottom: 1.25rem;
+  padding: 0.25rem 0.5rem;
+  background-color: rgba(0,0,0,0.03); /* Very subtle background */
+  border-radius: var(--border-radius-sm);
+}
+
+/* Pomodoro Styles */
+.pomodoro-control {
+  background-color: var(--earthy-card-bg); /* Same as other cards */
+  padding: 1.25rem;
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-subtle);
+  margin-top: 1rem; /* Space from the main session view */
+  border: 1px solid var(--rui-border-primary);
+}
+
+.pomodoro-control h2 {
+  font-size: 1.1rem;
+  color: var(--rui-text-primary);
+  margin-top: 0;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.pomodoro-inputs {
+  display: flex;
+  justify-content: space-around;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.pomodoro-inputs div {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center labels and inputs */
+}
+
+.pomodoro-inputs label {
+  font-size: 0.8rem;
+  color: var(--rui-text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.pomodoro-inputs input[type="number"] {
+  width: 60px; /* Fixed width for duration inputs */
+  padding: 0.5rem;
+  border: 1px solid var(--rui-border-input);
+  border-radius: var(--border-radius-sm);
+  text-align: center;
+  font-size: 0.9rem;
+  background-color: var(--rui-bg-input);
+  color: var(--rui-text-primary);
+  -moz-appearance: textfield; /* Hides spinners in Firefox */
+}
+
+.pomodoro-inputs input[type="number"]::-webkit-outer-spin-button,
+.pomodoro-inputs input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0; /* Hides spinners in Chrome, Safari, Edge */
+}
+
+.pomodoro-inputs input[type="number"]:focus {
+  border-color: var(--rui-accent-green);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--rui-focus-green);
+}
+
+#startPomodoro, #stopPomodoro {
+  margin-top: 0.5rem;
+  /* Can use accent colors or more neutral ones */
+}
+
+#stopPomodoro {
+    background-color: var(--rui-text-secondary); /* Neutral stop */
+    color: var(--rui-bg-primary);
+    border-color: var(--rui-text-secondary);
+}
+#stopPomodoro:hover {
+    background-color: var(--rui-text-primary);
+    border-color: var(--rui-text-primary);
+}
+
+#pomodoroStatus {
+  font-size: 0.85rem;
+  color: var(--rui-text-secondary);
+  text-align: center;
+  margin-top: 0.75rem;
+  min-height: 1.1em;
+}
+
+#pomodoroTimerDisplay {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--rui-accent-green);
+  text-align: center;
+  margin-top: 0.25rem;
+  min-height: 1.3em;
 } 

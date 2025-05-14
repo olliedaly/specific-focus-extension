@@ -1,16 +1,52 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Focus Monitor Pro</title>
+  <meta charset="UTF-8">
+  <title>Specific Focus</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h1>Focus Monitor Pro</h1>
-  <input type="text" id="focusPrompt" placeholder="Enter your focus (e.g., learn French)">
-  <button id="startSession">Start Session</button>
-  <button id="endSession" style="display:none;">End Session</button>
-  <div id="status">No active session.</div>
-  <div id="relevance"></div>
+  <div class="popup-container">
+    <header>
+      <h1>Specific Focus</h1>
+      <div id="dailyTotalDisplay">Time focused today: 00:00:00</div>
+    </header>
+
+    <section class="session-control">
+      <input type="text" id="focusPrompt" placeholder="What's your focus today?">
+      <button id="startSession">Start Session</button>
+    </section>
+
+    <section class="session-active-view" style="display:none;">
+      <div id="status">No active session.</div>
+      <div id="sessionTimer">00:00:00</div>
+      <div id="relevance">Monitoring...</div>
+      <button id="pauseSessionButton">Pause Session</button>
+      <button id="endSession">End Session</button>
+    </section>
+
+    <!-- Pomodoro Section (Initially Hidden) -->
+    <section class="pomodoro-control" style="display:none;">
+      <h2>Pomodoro Timer</h2>
+      <div class="pomodoro-inputs">
+        <div>
+          <label for="workDuration">Work (min):</label>
+          <input type="number" id="workDuration" value="25" min="1">
+        </div>
+        <div>
+          <label for="breakDuration">Break (min):</label>
+          <input type="number" id="breakDuration" value="5" min="1">
+        </div>
+      </div>
+      <button id="startPomodoro">Start Pomodoro</button>
+      <button id="stopPomodoro" style="display:none;">Stop Pomodoro</button>
+      <div id="pomodoroStatus"></div>
+      <div id="pomodoroTimerDisplay">00:00</div>
+    </section>
+    <!-- End Pomodoro Section -->
+
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html> 
