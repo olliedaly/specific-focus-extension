@@ -8,6 +8,8 @@ const STABILIZATION_CHECK_INTERVAL = 300; // ms - How often to check for changes
 const STABILIZATION_MIN_QUIET_PERIOD = 1200; // ms - Increased: How long data must be stable
 const STABILIZATION_MAX_WAIT_TIME = 3000; // ms - Increased slightly: Max time to wait
 const CONTENT_SCRIPT_SEND_COOLDOWN = 7000; // 7 seconds: Min time before re-sending for the same URL
+const HISTORY_DEBOUNCE_DELAY = 700; // ms
+const MUTATION_DEBOUNCE_DELAY = 2000; // ms
 
 const FOCUS_MODAL_ID = 'focus-monitor-pro-modal-overlay';
 
@@ -115,15 +117,14 @@ function injectModalStyles() {
         .${FOCUS_MODAL_ID}-content .button-container {
             margin-top: 20px;
             display: flex;
-            /* Default: stacked. To make them side-by-side and to the right: */
-            /* flex-direction: row; */
-            /* justify-content: flex-end; */ 
+            flex-direction: row; /* Buttons side-by-side */
+            justify-content: flex-end; /* Align to right */
             gap: 10px;
-            flex-direction: column; /* Keep stacked for now, common in modals */
         }
         .${FOCUS_MODAL_ID}-content button {
-            width: 100%;
-            padding: 10px 14px;
+            /* width: 100%; REMOVED - let buttons size naturally with padding and min-width */
+            padding: 10px 18px; /* Increased padding for better touch/click area and text visibility */
+            min-width: 100px; /* Increased min-width */
             border: 1px solid transparent;
             border-radius: var(--border-radius-sm);
             cursor: pointer;
@@ -162,6 +163,22 @@ function injectModalStyles() {
             background-color: var(--rui-border-primary);
             color: var(--rui-text-primary);
         }
+        .${FOCUS_MODAL_ID}-close-btn {
+            position: absolute;
+            top: 12px; /* Equidistant */
+            right: 12px; /* Equidistant */
+            background: none;
+            border: none;
+            font-size: 1.5rem; /* Increased size for better clickability */
+            color: var(--rui-text-secondary);
+            cursor: pointer;
+            padding: 4px; /* Added padding for easier clicking */
+            line-height: 1; /* Ensure X is centered if it's text */
+            z-index: 10; /* Ensure it's above other modal content if absolutely positioned */
+        }
+        .${FOCUS_MODAL_ID}-close-btn:hover {
+            color: var(--rui-text-primary);
+        }
     `;
     const style = document.createElement('style');
     style.id = styleId;
@@ -193,6 +210,13 @@ function showOffFocusModal(lastRelevantUrl) {
 
     const modalContent = document.createElement('div');
     modalContent.className = `${FOCUS_MODAL_ID}-content`;
+
+    // Add the close button to the Off Focus Modal as well, for consistency
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '&times;'; // 'X' character
+    closeButton.className = `${FOCUS_MODAL_ID}-close-btn`;
+    closeButton.onclick = () => removeOffFocusModal();
+    modalContent.appendChild(closeButton);
 
     const title = document.createElement('h2');
     title.textContent = "You seem to be off focus!";
@@ -250,6 +274,72 @@ function showOffFocusModal(lastRelevantUrl) {
     // Trigger fade-in animation
     requestAnimationFrame(() => {
         requestAnimationFrame(() => { // Double requestAnimationFrame for some browsers
+            overlay.classList.add('visible');
+        });
+    });
+}
+
+// Function to create a common modal structure
+function createBaseModal() {
+    removeOffFocusModal(); // Clear any existing modal
+
+    const overlay = document.createElement('div');
+    overlay.id = FOCUS_MODAL_ID;
+
+    const modalContent = document.createElement('div');
+    modalContent.className = `${FOCUS_MODAL_ID}-content`;
+
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '&times;'; // 'X' character
+    closeButton.className = `${FOCUS_MODAL_ID}-close-btn`;
+    closeButton.onclick = () => removeOffFocusModal();
+    modalContent.appendChild(closeButton);
+
+    overlay.appendChild(modalContent);
+    return { overlay, modalContent };
+}
+
+function showPomodoroBreakModal(breakDuration) {
+    console.log(`Content.js: showPomodoroBreakModal called. Duration: ${breakDuration} min`);
+    const { overlay, modalContent } = createBaseModal();
+
+    const title = document.createElement('h2');
+    title.textContent = "Focus Period Complete!";
+
+    const message = document.createElement('p');
+    message.textContent = `Time for a ${breakDuration}-minute break. Relax and recharge!`;
+
+    modalContent.appendChild(title);
+    modalContent.appendChild(message);
+
+    // No buttons needed other than the close 'X'
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            overlay.classList.add('visible');
+        });
+    });
+}
+
+function showPomodoroWorkModal() {
+    console.log("Content.js: showPomodoroWorkModal called.");
+    const { overlay, modalContent } = createBaseModal();
+
+    const title = document.createElement('h2');
+    title.textContent = "Break's Over!";
+
+    const message = document.createElement('p');
+    message.textContent = "Time to focus. Let's get started on your work session!";
+
+    modalContent.appendChild(title);
+    modalContent.appendChild(message);
+
+    // No buttons needed other than the close 'X'
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
             overlay.classList.add('visible');
         });
     });
@@ -327,6 +417,28 @@ function extractPageDataForStabilization() {
     return { data, signature }; 
 }
 
+function extractPageData() {
+    const data = {
+        url: window.location.href,
+        title: document.title,
+        metaDescription: document.querySelector('meta[name="description"]')?.content || "",
+        pageText: "",
+        htmlContent: ""
+    };
+
+    const readabilityArticle = getReadabilityArticle(document);
+
+    if (readabilityArticle && readabilityArticle.textContent) {
+        data.pageText = readabilityArticle.textContent.trim();
+        data.htmlContent = readabilityArticle.content || ""; // Full article HTML
+    } else {
+        data.pageText = (document.body?.innerText || "").trim();
+        data.htmlContent = (document.body?.innerHTML || "").substring(0, 10000); // Snippet to avoid being too large
+    }
+    // console.log("Content.js: Final extracted data:", { ...data, pageText: data.pageText.substring(0,100), htmlContent: data.htmlContent.substring(0,100) });
+    return data;
+}
+
 function sendUpdateWithExtractedData(pageData, source, details, uniqueRequestId) {
     // This function actually sends the message
     console.log(`%cContent.js (ID: ${uniqueRequestId}): FINAL SEND. Source: ${source}. URL: ${pageData.url}. Title: ${pageData.title.substring(0,50)}. Details: ${JSON.stringify(details).substring(0,100)}`, "color: green;");
@@ -340,7 +452,6 @@ function sendUpdateWithExtractedData(pageData, source, details, uniqueRequestId)
         console.warn(`Content.js (ID: ${uniqueRequestId}): Error sending message: ${error.message}`);
     });
 }
-
 
 function initiateStabilizationAndSend(source, details = {}) {
     const currentFullUrl = window.location.href;
@@ -388,164 +499,188 @@ function initiateStabilizationAndSend(source, details = {}) {
 
     currentToken.maxWaitTimeoutId = setTimeout(() => {
         console.log(`Content.js (ID: ${uniqueRequestId}): Max wait time (${STABILIZATION_MAX_WAIT_TIME}ms) reached. Sending current data.`);
-        performSend("max_wait_timeout");
+        performSend('MAX_WAIT');
     }, STABILIZATION_MAX_WAIT_TIME);
 
-    currentToken.checkIntervalId = setInterval(() => {
-        if (activeProcessingToken !== currentToken) { // Check if superseded
+    const checkStability = () => {
+        if (activeProcessingToken !== currentToken) {
             clearInterval(currentToken.checkIntervalId);
-            clearTimeout(currentToken.maxWaitTimeoutId);
+            // console.log(`Content.js (ID: ${uniqueRequestId}): Stability check for token ${currentToken.id} was cancelled or superseded.`);
             return;
         }
 
-        const { signature: currentSignature } = extractPageDataForStabilization();
-        const now = Date.now();
+        const { signature: newSignature } = extractPageDataForStabilization();
 
-        if (currentToken.lastSignature === null || currentSignature !== currentToken.lastSignature) {
-            // Data changed, or first check
-            // console.log(`Content.js (ID: ${uniqueRequestId}): Data changed or first check. New Signature: ${currentSignature.substring(0,100)}`);
-            currentToken.lastSignature = currentSignature;
-            currentToken.lastSignatureTime = now;
+        if (newSignature !== currentToken.lastSignature) {
+            // console.log(`Content.js (ID: ${uniqueRequestId}): Content changed. Resetting quiet period. Old: ${currentToken.lastSignature}, New: ${newSignature}`);
+            currentToken.lastSignature = newSignature;
+            currentToken.lastSignatureTime = Date.now();
         } else {
-            // Data is the same as last check
-            if (now - currentToken.lastSignatureTime >= STABILIZATION_MIN_QUIET_PERIOD) {
-                console.log(`Content.js (ID: ${uniqueRequestId}): Data stable for ${STABILIZATION_MIN_QUIET_PERIOD}ms. Sending.`);
-                performSend("stabilized");
+            const quietDuration = Date.now() - currentToken.lastSignatureTime;
+            if (quietDuration >= STABILIZATION_MIN_QUIET_PERIOD) {
+                console.log(`Content.js (ID: ${uniqueRequestId}): Content stable for ${quietDuration}ms. Sending.`);
+                performSend('STABLE');
             } else {
-                // console.log(`Content.js (ID: ${uniqueRequestId}): Data stable, but quiet period not met yet.`);
+                // console.log(`Content.js (ID: ${uniqueRequestId}): Content stable, but quiet period not met (${quietDuration}ms / ${STABILIZATION_MIN_QUIET_PERIOD}ms).`);
             }
         }
 
-        if (now - currentToken.startTime > STABILIZATION_MAX_WAIT_TIME + 50) { // Safety break for interval
-            console.warn(`Content.js (ID: ${uniqueRequestId}): Interval running past max_wait_time. Forcibly stopping and sending.`);
-            performSend("interval_safety_timeout");
+        // Safety break for interval, in case maxWaitTimeoutId failed to clear it
+        if (Date.now() - currentToken.startTime > STABILIZATION_MAX_WAIT_TIME + STABILIZATION_CHECK_INTERVAL * 2) {
+            console.warn(`Content.js (ID: ${uniqueRequestId}): Interval seems to have overran max_wait_time significantly. Clearing for ${currentToken.id}.`);
+            clearInterval(currentToken.checkIntervalId);
+            if (activeProcessingToken === currentToken) { // If it hasn't already sent via MAX_WAIT
+                 // performSend('INTERVAL_TIMEOUT_SAFETY'); // This might cause double send if MAX_WAIT is about to fire.
+            }
         }
+    };
 
-    }, STABILIZATION_CHECK_INTERVAL);
+    // Initial signature setup
+    const { signature: initialSignature } = extractPageDataForStabilization();
+    currentToken.lastSignature = initialSignature;
+    currentToken.lastSignatureTime = Date.now();
+    // console.log(`Content.js (ID: ${uniqueRequestId}): Initial signature for token ${currentToken.id}: ${initialSignature}`);
+
+    currentToken.checkIntervalId = setInterval(checkStability, STABILIZATION_CHECK_INTERVAL);
+    // Initial check, slight delay to allow first signature to be set if page is extremely fast.
+    // setTimeout(checkStability, 50); // Or just rely on the first interval tick.
 }
 
-// --- How Triggers Call `initiateStabilizationAndSend` ---
-
-// 1. Initial Load
-setTimeout(() => {
-    console.log("Content.js: Initial load timeout. Initiating stabilization.");
-    initiateStabilizationAndSend("initial_load");
-}, 300); // Short delay to ensure script is fully running
-
-// 2. Background Request
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === "REQUEST_CONTENT_UPDATE") {
-        console.log(`Content.js: Received REQUEST_CONTENT_UPDATE from background. Source: ${message.sourceOfRequest}. Initiating stabilization.`);
-        initiateStabilizationAndSend("background_request", { requestedBy: message.sourceOfRequest });
-    } else if (message.type === "SHOW_OFF_FOCUS_MODAL") {
-        console.log("Content.js: Received SHOW_OFF_FOCUS_MODAL from background. Last relevant URL:", message.lastRelevantUrl);
+    if (message.type === "SHOW_OFF_FOCUS_MODAL") {
+        console.log("Content.js: Received SHOW_OFF_FOCUS_MODAL, lastRelevantUrl:", message.lastRelevantUrl);
         showOffFocusModal(message.lastRelevantUrl);
+    } else if (message.type === "REQUEST_CONTENT_UPDATE") {
+        console.log(`Content.js: Received REQUEST_CONTENT_UPDATE from background. Source: ${message.sourceOfRequest}. Current URL: ${window.location.href}`);
+        initiateStabilizationAndSend(`REQUEST_CONTENT_FROM_BG_VIA_${message.sourceOfRequest || 'UNKNOWN'}`);
+    } else if (message.type === "SHOW_POMODORO_BREAK_MODAL") {
+        console.log("Content.js: Received SHOW_POMODORO_BREAK_MODAL, duration:", message.breakDuration);
+        showPomodoroBreakModal(message.breakDuration);
+    } else if (message.type === "SHOW_POMODORO_WORK_MODAL") {
+        console.log("Content.js: Received SHOW_POMODORO_WORK_MODAL");
+        showPomodoroWorkModal();
     }
-    // Not returning true, as showOffFocusModal doesn't use sendResponse directly for this message.
+    return false; 
 });
 
-// 3. History API changes (SPAs)
-// Debounce these slightly before initiating stabilization, as history events can fire rapidly.
-let historyDebounceTimer = null;
-const HISTORY_DEBOUNCE_DELAY = 700; // Increased slightly
-
-function handleHistoryChange(source) {
-    clearTimeout(historyDebounceTimer);
-    historyDebounceTimer = setTimeout(() => {
-        console.log(`Content.js: ${source} detected. Initiating stabilization.`);
-        initiateStabilizationAndSend(source);
-    }, HISTORY_DEBOUNCE_DELAY);
+// Debounce utility
+function debounce(func, delay) {
+    let timeoutId;
+    return function(...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
 }
 
-(function(history){
-    var originalPushState = history.pushState;
-    history.pushState = function() {
-        const result = originalPushState.apply(history, arguments);
-        handleHistoryChange("history_pushState");
-        return result;
-    };
-    var originalReplaceState = history.replaceState;
-    history.replaceState = function() {
-        const result = originalReplaceState.apply(history, arguments);
-        handleHistoryChange("history_replaceState");
-        return result;
-    };
-    window.addEventListener('popstate', () => handleHistoryChange("history_popstate"));
-    console.log("Content.js: History API observers attached for stabilization.");
-})(window.history);
-
-
-// 4. MutationObserver
-// The MutationObserver should also feed into `initiateStabilizationAndSend`
-// It needs its own debounce before calling `initiateStabilizationAndSend` to avoid thrashing on many small mutations.
-let mutationDebounceTimer = null;
-const MUTATION_DEBOUNCE_DELAY = 2000; // Increased: Existing debounce for mutations
-
-const combinedObserver = new MutationObserver((mutationsList) => {
-    let significantChange = false;
-    // Simplified significance check for brevity, use your more detailed one
-    if (document.title !== (activeProcessingToken ? (extractPageDataForStabilization().data.title) : document.title)) { // Compare against potentially tracked title
-        significantChange = true;
+// Function to handle page navigation or load
+function handlePageNavigationOrLoad(source) {
+    console.log(`Content.js: handlePageNavigationOrLoad triggered by: ${source}. Current URL: ${window.location.href}`);
+    if (currentUrl !== window.location.href || source === "DOMContentLoaded" || source === "MUTATION_CONTENT_MAIN_CHANGE") {
+        console.log(`Content.js: URL changed or significant event. Old: ${currentUrl}, New: ${window.location.href}. Source: ${source}`);
+        currentUrl = window.location.href; // Update tracked URL
+        initiateStabilizationAndSend(source, { newUrl: currentUrl });
+    } else {
+        console.log(`Content.js: URL unchanged, minor event. Not re-initiating full stabilization. URL: ${currentUrl}. Source: ${source}`);
     }
-    if (!significantChange && mutationsList.some(m => m.type === 'childList' || m.type === 'characterData')) {
-        significantChange = true;
-    }
+}
 
-    if (significantChange) {
-        console.log("Content.js: MutationObserver detected change. Debouncing before initiating stabilization.");
-        clearTimeout(mutationDebounceTimer);
-        mutationDebounceTimer = setTimeout(() => {
-            console.log("Content.js: Mutation debounce finished. Initiating stabilization.");
-            initiateStabilizationAndSend("mutation_event");
-        }, MUTATION_DEBOUNCE_DELAY);
-    }
+const debouncedProcessForHistory = debounce(() => handlePageNavigationOrLoad("HISTORY_STATE_CHANGED"), HISTORY_DEBOUNCE_DELAY);
+const debouncedProcessForMutation = debounce(() => handlePageNavigationOrLoad("MUTATION_CONTENT_MAIN_CHANGE"), MUTATION_DEBOUNCE_DELAY);
+
+
+// Listen for DOMContentLoaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => handlePageNavigationOrLoad("DOMContentLoaded"));
+} else {
+    // DOMContentLoaded has already fired
+    handlePageNavigationOrLoad("DOMContentLoaded_ALREADY_FIRED");
+}
+
+// Listen for history changes (SPA navigations)
+window.addEventListener('popstate', () => {
+    console.log("Content.js: popstate event");
+    debouncedProcessForHistory();
 });
 
-function attachMutationObservers() {
-    if (document.head) {
-        combinedObserver.observe(document.head, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['title'] });
+// Wrap pushState and replaceState to detect SPA navigations
+const originalPushState = history.pushState;
+history.pushState = function(...args) {
+    console.log("Content.js: pushState called");
+    originalPushState.apply(this, args);
+    debouncedProcessForHistory();
+};
+
+const originalReplaceState = history.replaceState;
+history.replaceState = function(...args) {
+    console.log("Content.js: replaceState called");
+    originalReplaceState.apply(this, args);
+    debouncedProcessForHistory();
+};
+
+// MutationObserver to detect dynamic content changes
+let mutationObserver = null;
+function setupMutationObserver() {
+    if (mutationObserver) {
+        mutationObserver.disconnect();
     }
-    if (document.body) {
-        combinedObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
-    } else {
-        window.addEventListener('DOMContentLoaded', () => {
-            if (document.head) combinedObserver.observe(document.head, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['title'] });
-            if (document.body) combinedObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
-        });
+    
+    const targetNode = document.body;
+    if (!targetNode) {
+        console.warn("Content.js: document.body not found for MutationObserver. Will retry.");
+        setTimeout(setupMutationObserver, 500); // Retry if body not yet available
+        return;
     }
-    console.log("Content.js: Combined MutationObserver attached for stabilization.");
-}
-attachMutationObservers();
 
-// Helper to extract full data for final send
-function extractPageData() {
-    let bodyTextForLLM = "";
-    const readabilityArticle = getReadabilityArticle(document);
+    const config = { childList: true, subtree: true, characterData: true };
+    let lastObservedTitle = document.title;
 
-    if (readabilityArticle && readabilityArticle.textContent && readabilityArticle.textContent.trim().length > 100) { // Arbitrary length check
-        // console.log("Content.js: Using Readability for LLM body text.");
-        bodyTextForLLM = readabilityArticle.textContent.trim();
-    } else {
-        // Fallback to existing main/article/body logic if Readability fails or content is too short
-        // console.log("Content.js: Readability failed or content too short, falling back for LLM body text.");
-        const mainElementText = document.querySelector('main')?.innerText;
-        const articleElementText = document.querySelector('article')?.innerText;
-        const bodyElementText = document.body?.innerText;
-
-        if (mainElementText && mainElementText.trim().length > 100) {
-            bodyTextForLLM = mainElementText.trim();
-        } else if (articleElementText && articleElementText.trim().length > 100) {
-            bodyTextForLLM = articleElementText.trim();
-        } else {
-            bodyTextForLLM = (bodyElementText || "").trim();
+    mutationObserver = new MutationObserver((mutationsList, observer) => {
+        // More sophisticated check:
+        // 1. Check if title changed significantly
+        // 2. Check if <main> or <article> content changed substantially (more than just minor text tweaks)
+        // For now, a simple heuristic: if title changes, or if there are significant additions/removals.
+        
+        if (document.title !== lastObservedTitle) {
+            console.log("Content.js: MutationObserver - Title changed.");
+            lastObservedTitle = document.title;
+            debouncedProcessForMutation(); // Title change is a strong signal
+            return;
         }
-    }
 
-    return {
-        url: window.location.href,
-        title: document.title,
-        metaDescription: document.querySelector('meta[name="description"]')?.content || "",
-        metaKeywords: document.querySelector('meta[name="keywords"]')?.content || "",
-        bodyTextSnippet: bodyTextForLLM.substring(0, 2000) // Ensure it's still truncated to a reasonable length for the backend
-    };
+        for (const mutation of mutationsList) {
+            if (mutation.type === 'childList' && (mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0)) {
+                 // Heuristic: if many nodes added/removed, or a significant node (like main/article) changes.
+                 // This can be refined to check the 'significance' of the change.
+                const isSignificantChange = Array.from(mutation.addedNodes).some(node => node.nodeType === Node.ELEMENT_NODE && (node.tagName === 'MAIN' || node.tagName === 'ARTICLE' || node.contains(document.querySelector('h1, h2, article, main')))) ||
+                                          Array.from(mutation.removedNodes).some(node => node.nodeType === Node.ELEMENT_NODE && (node.tagName === 'MAIN' || node.tagName === 'ARTICLE'));
+
+                if (isSignificantChange || mutation.target === document.body || document.main?.contains(mutation.target)) {
+                     console.log("Content.js: MutationObserver - Significant childList change detected.");
+                     debouncedProcessForMutation();
+                     return; // Process once per batch of mutations
+                }
+            }
+            // Could add characterData check here too, but can be very noisy.
+            // if (mutation.type === 'characterData') { ... }
+        }
+    });
+
+    try {
+        mutationObserver.observe(targetNode, config);
+        console.log("Content.js: MutationObserver is now observing the document body.");
+    } catch (e) {
+        console.error("Content.js: Error starting MutationObserver:", e);
+    }
 }
+
+// Initial setup for MutationObserver
+// Delay slightly to ensure body is fully available and reduce noise from initial rendering.
+setTimeout(setupMutationObserver, 1000);
+
+// Initial call to process the page when the script is first injected.
+// Wrapped in a small timeout to allow the page to settle a bit from initial load.
+setTimeout(() => {
+    handlePageNavigationOrLoad("INITIAL_LOAD_TIMEOUT");
+}, 500);

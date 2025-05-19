@@ -98,11 +98,11 @@ function setRelevanceAppearance(assessmentText) {
 
 function updatePomodoroTimerDisplay() {
     chrome.storage.local.get(['pomodoroCycleEndTime', 'pomodoroCurrentMode', 'pomodoroEnabled'], (result) => {
-        // console.log("popup.js - updatePomodoroTimerDisplay - Storage result:", result); // Debug log
+        console.log("popup.js - updatePomodoroTimerDisplay - Storage result:", result); // Debug log - UNCOMMENTED
         if (result.pomodoroEnabled && result.pomodoroCycleEndTime && result.pomodoroCurrentMode) {
             const now = Date.now();
             const timeLeftMs = result.pomodoroCycleEndTime - now;
-            // console.log("popup.js - updatePomodoroTimerDisplay - now:", now, "endTime:", result.pomodoroCycleEndTime, "timeLeftMs:", timeLeftMs); // Debug log
+            console.log("popup.js - updatePomodoroTimerDisplay - now:", now, "endTime:", result.pomodoroCycleEndTime, "timeLeftMs:", timeLeftMs); // Debug log - UNCOMMENTED
             if (timeLeftMs <= 0) {
                 pomodoroTimerDisplayDiv.textContent = "00:00";
                 // Background alarm should handle mode switch
@@ -123,7 +123,7 @@ function startPomodoroInterval() {
     if (pomodoroInterval) clearInterval(pomodoroInterval);
     updatePomodoroTimerDisplay(); // Initial display
     pomodoroInterval = setInterval(() => {
-        // console.log("popup.js - Pomodoro interval tick"); // Debug log
+        console.log("popup.js - Pomodoro interval tick"); // Debug log - UNCOMMENTED
         updatePomodoroTimerDisplay();
     }, 1000);
 }
@@ -137,7 +137,7 @@ function stopPomodoroInterval() {
 
 function updatePomodoroUI(pomodoroData) {
     const { pomodoroEnabled, pomodoroWorkDuration, pomodoroBreakDuration, pomodoroCurrentMode, pomodoroCycleEndTime } = pomodoroData;
-    // console.log("popup.js - updatePomodoroUI - Data:", pomodoroData); // Debug log
+    console.log("popup.js - updatePomodoroUI - Data:", pomodoroData); // Debug log - UNCOMMENTED
 
     if (pomodoroEnabled && pomodoroCurrentMode) {
         pomodoroControlSection.style.display = 'block'; // Should be managed by session active state
@@ -166,7 +166,7 @@ function updatePopupUI(sessionData) {
             pomodoroEnabled, pomodoroWorkDuration, pomodoroBreakDuration, pomodoroCurrentMode, pomodoroCycleEndTime } = sessionData;
 
     updateDailyTotalDisplay(); // Update daily total display whenever UI is refreshed
-    // console.log("popup.js - updatePopupUI - Passed Pomodoro Data:", { pomodoroEnabled, pomodoroWorkDuration, pomodoroBreakDuration, pomodoroCurrentMode, pomodoroCycleEndTime }); // Debug Log
+    console.log("popup.js - updatePopupUI - Passed Pomodoro Data:", { pomodoroEnabled, pomodoroWorkDuration, pomodoroBreakDuration, pomodoroCurrentMode, pomodoroCycleEndTime }); // Debug Log - UNCOMMENTED
 
     if (sessionFocus) {
         focusPromptInput.value = sessionFocus;
@@ -212,6 +212,46 @@ chrome.storage.local.get(keysToFetch, (result) => {
     updatePopupUI(result);
 });
 
+startPomodoroButton.addEventListener('click', () => {
+    console.log("popup.js: Start Pomodoro button CLICKED!");
+    const workMin = parseInt(workDurationInput.value, 10);
+    const breakMin = parseInt(breakDurationInput.value, 10);
+    console.log(`popup.js: Start Pomodoro clicked. Work: ${workMin}, Break: ${breakMin}`);
+
+    if (isNaN(workMin) || workMin < 1 || isNaN(breakMin) || breakMin < 1) {
+        pomodoroStatusDiv.textContent = "Please set valid durations (min. 1 minute).";
+        // Temporarily style the input fields to show error
+        workDurationInput.classList.add('input-error-temp');
+        breakDurationInput.classList.add('input-error-temp');
+        setTimeout(() => {
+            workDurationInput.classList.remove('input-error-temp');
+            breakDurationInput.classList.remove('input-error-temp');
+        }, 2000);
+        return;
+    }
+
+    chrome.runtime.sendMessage({
+        type: "START_POMODORO_CYCLE",
+        workDuration: workMin,
+        breakDuration: breakMin
+    }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error("Popup.js: Error sending/receiving START_POMODORO_CYCLE message:", chrome.runtime.lastError.message);
+            pomodoroStatusDiv.textContent = "Error starting. Check console.";
+            return;
+        }
+
+        console.log("popup.js: Response from START_POMODORO_CYCLE:", response);
+        if (response && response.status === 'pomodoro_started') {
+            chrome.storage.local.get(keysToFetch, updatePopupUI);
+        } else {
+            console.warn("popup.js: START_POMODORO_CYCLE - Unexpected or no response:", response);
+            pomodoroStatusDiv.textContent = "Failed to start. Try again.";
+        }
+    });
+});
+
+// This is the original startSessionButton listener that should have been preserved.
 startSessionButton.addEventListener('click', () => {
     const focus = focusPromptInput.value.trim();
     if (focus) {
@@ -221,12 +261,12 @@ startSessionButton.addEventListener('click', () => {
             sessionStartTime: Date.now(),
             isSessionPaused: false,
             pausedElapsedTime: 0,
-            lastRelevantUrlForFocus: null // From previous logic
+            lastRelevantUrlForFocus: null 
         };
         const pomodoroDefaults = {
             pomodoroEnabled: false,
-            pomodoroWorkDuration: 25,
-            pomodoroBreakDuration: 5,
+            pomodoroWorkDuration: 25, // Default value
+            pomodoroBreakDuration: 5,  // Default value
             pomodoroCurrentMode: null,
             pomodoroCycleEndTime: null
         };
@@ -237,9 +277,8 @@ startSessionButton.addEventListener('click', () => {
             chrome.runtime.sendMessage({ type: "SESSION_STARTED", focus: focus });
         });
     } else {
-        // Simple feedback, could be improved with a dedicated error message element
         focusPromptInput.placeholder = 'Please enter a focus first!';
-        focusPromptInput.classList.add('input-error-temp'); // Add a class for temp error indication
+        focusPromptInput.classList.add('input-error-temp'); 
         setTimeout(() => {
             focusPromptInput.placeholder = "What's your focus today?";
             focusPromptInput.classList.remove('input-error-temp');
@@ -284,6 +323,24 @@ endSessionButton.addEventListener('click', () => {
         updatePopupUI({}); // Pass empty object to signify no session
         chrome.runtime.sendMessage({ type: "SESSION_ENDED" });
         chrome.action.setIcon({ path: "icons/icon48.png" }); 
+    });
+});
+
+stopPomodoroButton.addEventListener('click', () => {
+    console.log("popup.js: Stop Pomodoro button CLICKED!");
+    chrome.runtime.sendMessage({ type: "STOP_POMODORO_CYCLE" }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error("Popup.js: Error sending/receiving STOP_POMODORO_CYCLE message:", chrome.runtime.lastError.message);
+            pomodoroStatusDiv.textContent = "Error stopping. Check console.";
+            return;
+        }
+        console.log("popup.js: Response from STOP_POMODORO_CYCLE:", response);
+        if (response && response.status === 'pomodoro_stopped') {
+            chrome.storage.local.get(keysToFetch, updatePopupUI);
+        } else {
+            console.warn("popup.js: STOP_POMODORO_CYCLE - Unexpected or no response:", response);
+            pomodoroStatusDiv.textContent = "Failed to stop. Try again.";
+        }
     });
 });
 

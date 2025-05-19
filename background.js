@@ -1,4 +1,4 @@
-const BACKEND_URL = "http://localhost:5001/classify";
+const BACKEND_URL = "https://specific-focus-backend-1056415616503.europe-west1.run.app/classify";
 let currentSessionFocus = null;
 let lastProcessedUrlTimestamp = {};
 const PROCESS_COOLDOWN = 3000; // ms
@@ -24,6 +24,10 @@ const POMODORO_CURRENT_MODE_KEY = 'pomodoroCurrentMode'; // "work" | "break"
 const POMODORO_CYCLE_END_TIME_KEY = 'pomodoroCycleEndTime';
 const POMODORO_ALARM_NAME_WORK = 'pomodoroWorkAlarm';
 const POMODORO_ALARM_NAME_BREAK = 'pomodoroBreakAlarm';
+
+// Icon dimensions
+const ICON_WIDTH = 48;
+const ICON_HEIGHT = 48;
 
 console.log("Background.js: Script loaded/reloaded. Initializing...");
 
@@ -73,23 +77,23 @@ chrome.storage.local.get([LAST_RELEVANT_URL_KEY, 'sessionFocus', SESSION_START_T
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'local') {
         if (changes.sessionFocus) {
-            currentSessionFocus = changes.sessionFocus.newValue;
-            console.log("Background: Session focus changed via storage to:", currentSessionFocus);
-            if (!currentSessionFocus) {
+        currentSessionFocus = changes.sessionFocus.newValue;
+        console.log("Background: Session focus changed via storage to:", currentSessionFocus);
+        if (!currentSessionFocus) {
                 console.log("Background: Session ended (detected by sessionFocus change). Clearing related states.");
-                try {
-                    chrome.action.setIcon({ path: "icons/icon48.png" });
-                } catch (e) {
-                    console.error("Background.js: Error setting icon on session end:", e);
-                }
-                lastProcessedUrlTimestamp = {};
-                currentlyProcessingUrl = {};
+            try {
+                chrome.action.setIcon({ path: "icons/icon48.png" });
+            } catch (e) {
+                console.error("Background.js: Error setting icon on session end:", e);
+            }
+            lastProcessedUrlTimestamp = {};
+            currentlyProcessingUrl = {};
                 lastRelevantUrl = null; // Clear in-memory last relevant URL
                 recentAssessmentsCache = {}; // Clear sticky cache
                 // Timer states are primarily managed via messages, but good to ensure consistency if needed
-            } else {
-                console.log("Background: Session started or focus changed. Triggering analysis for current tab.");
-                triggerCurrentTabAnalysis("SESSION_RESTARTED_OR_FOCUS_CHANGED");
+        } else {
+            console.log("Background: Session started or focus changed. Triggering analysis for current tab.");
+            triggerCurrentTabAnalysis("SESSION_RESTARTED_OR_FOCUS_CHANGED");
             }
         }
     }
@@ -152,7 +156,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // Today's total time will be updated on pause/end
         }, () => {
             console.log("Background: Session timer states initialized for focus:", message.focus);
-            triggerCurrentTabAnalysis("SESSION_STARTED_POPUP");
+        triggerCurrentTabAnalysis("SESSION_STARTED_POPUP");
         });
     } else if (message.type === "SESSION_ENDED") {
         console.log("Background: SESSION_ENDED message received from popup.");
@@ -170,6 +174,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             recentAssessmentsCache = {};
             // Popup.js handles removing sessionFocus, lastAssessmentText, lastRelevantUrlForFocus, focusWhitelist,
             // sessionStartTime, isSessionPaused, pausedElapsedTime from storage.
+            // When main session ends, also ensure Pomodoro is stopped and its icon overlays are cleared.
+            chrome.alarms.clear(POMODORO_ALARM_NAME_WORK);
+            chrome.alarms.clear(POMODORO_ALARM_NAME_BREAK);
+            chrome.storage.local.set({
+                [POMODORO_ENABLED_KEY]: false,
+                [POMODORO_CURRENT_MODE_KEY]: null,
+                [POMODORO_CYCLE_END_TIME_KEY]: null
+            }, () => {
+                console.log("Background: Pomodoro cycle explicitly stopped due to session end.");
+                // Attempt to update icon for the active tab to remove Pomodoro overlay
+                chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
+                    if (activeTabs && activeTabs.length > 0 && activeTabs[0].id) {
+                        refreshIconForTab(activeTabs[0].id);
+                    }
+                });
+            });
         });
     } else if (message.type === "ADD_TO_WHITELIST") {
         if (message.url) {
@@ -228,6 +248,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.alarms.create(POMODORO_ALARM_NAME_WORK, { delayInMinutes: workDuration });
             console.log(`Background: Pomodoro work cycle started for ${workDuration} min.`);
             if (sendResponse) sendResponse({status: "pomodoro_started", mode: "work", endTime: Date.now() + (workDuration * 60000) });
+            // Update icon for current tab
+            chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
+                if (activeTabs && activeTabs.length > 0 && activeTabs[0].id) {
+                    refreshIconForTab(activeTabs[0].id);
+                }
+            });
         });
         return true; // Indicate async response
     } else if (message.type === "STOP_POMODORO_CYCLE") {
@@ -242,6 +268,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }, () => {
             console.log("Background: Pomodoro cycle stopped.");
             if (sendResponse) sendResponse({status: "pomodoro_stopped"});
+            // Update icon for current tab to remove Pomodoro overlay
+            chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
+                if (activeTabs && activeTabs.length > 0 && activeTabs[0].id) {
+                    refreshIconForTab(activeTabs[0].id);
+                }
+            });
         });
         return true; // Indicate async response
     }
@@ -268,17 +300,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         let nextDuration = 0;
         let nextAlarmName = null;
         let notificationMessage = "";
+        let messageToContentScript = null;
 
         if (alarm.name === POMODORO_ALARM_NAME_WORK && result[POMODORO_CURRENT_MODE_KEY] === "work") {
             nextMode = "break";
             nextDuration = result[POMODORO_BREAK_DURATION_KEY];
             nextAlarmName = POMODORO_ALARM_NAME_BREAK;
             notificationMessage = `Work cycle finished! Time for a ${nextDuration}-minute break.`;
+            messageToContentScript = { type: "SHOW_POMODORO_BREAK_MODAL", breakDuration: nextDuration };
         } else if (alarm.name === POMODORO_ALARM_NAME_BREAK && result[POMODORO_CURRENT_MODE_KEY] === "break") {
             nextMode = "work";
             nextDuration = result[POMODORO_WORK_DURATION_KEY];
             nextAlarmName = POMODORO_ALARM_NAME_WORK;
             notificationMessage = `Break finished! Time for a ${nextDuration}-minute work session.`;
+            messageToContentScript = { type: "SHOW_POMODORO_WORK_MODAL" };
         }
 
         if (nextMode && nextAlarmName && nextDuration > 0) {
@@ -289,12 +324,25 @@ chrome.alarms.onAlarm.addListener((alarm) => {
             }, () => {
                 chrome.alarms.create(nextAlarmName, { delayInMinutes: nextDuration });
                 
-                // Notify popup about mode change (optional, popup can also poll or listen to storage)
                 chrome.runtime.sendMessage({
                     type: "POMODORO_MODE_CHANGED", 
                     mode: nextMode, 
                     endTime: Date.now() + (nextDuration * 60000)
                 }).catch(e => console.log("Error sending POMODORO_MODE_CHANGED to popup:", e.message));
+
+                // Update icon and send message to content script for active tab
+                chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
+                    if (activeTabs && activeTabs.length > 0 && activeTabs[0].id) {
+                        const activeTabId = activeTabs[0].id;
+                        refreshIconForTab(activeTabId); // Update icon (will show brain/coffee)
+                        
+                        if (messageToContentScript && activeTabs[0].url && (activeTabs[0].url.startsWith('http://') || activeTabs[0].url.startsWith('https://'))) {
+                            console.log(`Background: Sending ${messageToContentScript.type} to tab ${activeTabId}`);
+                            chrome.tabs.sendMessage(activeTabId, messageToContentScript)
+                                .catch(e => console.warn(`Background: Error sending ${messageToContentScript.type} to tab ${activeTabId}: ${e.message}`));
+                        }
+                    }
+                });
 
                 // Simple notification (requires "notifications" permission in manifest)
                 // chrome.notifications.create({
@@ -312,10 +360,103 @@ chrome.alarms.onAlarm.addListener((alarm) => {
                 [POMODORO_ENABLED_KEY]: false,
                 [POMODORO_CURRENT_MODE_KEY]: null,
                 [POMODORO_CYCLE_END_TIME_KEY]: null
+            }, () => {
+                // Update icon for active tab if Pomodoro is forcibly stopped due to error
+                chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
+                    if (activeTabs && activeTabs.length > 0 && activeTabs[0].id) {
+                        refreshIconForTab(activeTabs[0].id);
+                    }
+                });
             });
         }
     });
 });
+
+// --- Icon Management with Pomodoro Overlays ---
+
+async function loadImageBitmap(path) {
+    try {
+        const response = await fetch(chrome.runtime.getURL(path));
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        return await createImageBitmap(blob);
+    } catch (e) {
+        console.error(`Error loading image ${path}:`, e);
+        return null;
+    }
+}
+
+async function generateDynamicIcon(tabId, baseIconPath, overlayIconPath = null) {
+    try {
+        const canvas = new OffscreenCanvas(ICON_WIDTH, ICON_HEIGHT);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.error("Failed to get canvas context for icon generation.");
+            // Fallback to just setting base icon path
+            chrome.action.setIcon({ path: baseIconPath, tabId });
+            return;
+        }
+
+        const baseImage = await loadImageBitmap(baseIconPath);
+        if (baseImage) {
+            ctx.drawImage(baseImage, 0, 0, ICON_WIDTH, ICON_HEIGHT);
+        }
+
+        if (overlayIconPath) {
+            const overlayImage = await loadImageBitmap(overlayIconPath);
+            if (overlayImage) {
+                ctx.drawImage(overlayImage, 0, 0, ICON_WIDTH, ICON_HEIGHT); // Assuming overlay is same size
+            }
+        }
+        const imageData = ctx.getImageData(0, 0, ICON_WIDTH, ICON_HEIGHT);
+        chrome.action.setIcon({ imageData: imageData, tabId: tabId });
+        // console.log(`Background: Dynamically updated icon for tab ${tabId} with base ${baseIconPath} and overlay ${overlayIconPath || 'none'}`);
+
+    } catch (e) {
+        console.error("Error generating dynamic icon:", e);
+        // Fallback if canvas operations fail
+        if (baseIconPath) {
+            chrome.action.setIcon({ path: baseIconPath, tabId });
+        }
+    }
+}
+
+async function refreshIconForTab(tabId, forceAssessmentText = null) {
+    if (!tabId) return;
+
+    // Determine the base icon based on current assessment and session focus
+    chrome.storage.local.get(['lastAssessmentText', 'sessionFocus', POMODORO_CURRENT_MODE_KEY], async (storage) => {
+        let baseIconPath = "icons/icon48.png"; // Default icon
+        let currentAssessment = forceAssessmentText || storage.lastAssessmentText;
+
+        if (storage.sessionFocus) {
+            if (currentAssessment === "Relevant") {
+                baseIconPath = "icons/icon_relevant48.png";
+            } else if (currentAssessment === "Irrelevant") {
+                baseIconPath = "icons/icon_irrelevant48.png";
+            } else if (currentAssessment === "Error") {
+                baseIconPath = "icons/icon_error48.png";
+            }
+            // If no assessment yet, but session active, could use a specific "monitoring" icon or default
+        }
+
+        let overlayIconPath = null;
+        if (storage.sessionFocus && storage[POMODORO_CURRENT_MODE_KEY]) {
+            if (storage[POMODORO_CURRENT_MODE_KEY] === 'work') {
+                overlayIconPath = 'icons/brain.png';
+            } else if (storage[POMODORO_CURRENT_MODE_KEY] === 'break') {
+                overlayIconPath = 'icons/coffee.png';
+            }
+        }
+        
+        // console.log(`Background: Refreshing icon for tab ${tabId}. Base: ${baseIconPath}, Overlay: ${overlayIconPath}, Assessment: ${currentAssessment}`);
+        await generateDynamicIcon(tabId, baseIconPath, overlayIconPath);
+    });
+}
+
+// --- End Icon Management ---
 
 // Helper function to get the whitelist
 async function getWhitelist() {
@@ -404,21 +545,10 @@ async function handlePageData(tabId, pageData, receivedSource, receivedDetails =
             lastAssessmentText: whitelistedAssessment 
         });
 
-        // Notify other parts of the extension
         chrome.runtime.sendMessage({ type: "ASSESSMENT_RESULT_TEXT", assessmentText: whitelistedAssessment })
             .catch(e => console.warn(`Background (ID: ${processingAttemptId}): Error sending ASSESSMENT_RESULT_TEXT for whitelisted URL: ${e.message}`));
         
-        try {
-            const tab = await chrome.tabs.get(tabId).catch(() => null);
-            if (tab) {
-                await chrome.action.setIcon({ path: "icons/icon_relevant48.png", tabId: tabId });
-            } else {
-                 console.warn(`Background (ID: ${processingAttemptId}): Tab ${tabId} not found for whitelisted icon update. Setting global icon.`);
-                await chrome.action.setIcon({ path: "icons/icon_relevant48.png" });
-            }
-        } catch (iconError) {
-            console.error(`Background (ID: ${processingAttemptId}): Failed to set icon for whitelisted URL ${url}:`, iconError);
-        }
+        refreshIconForTab(tabId, whitelistedAssessment); // Update icon
         return; 
     }
     // --- End Whitelist Check ---
@@ -474,7 +604,7 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
             title: pageContent.title || "",
             meta_description: pageContent.metaDescription || "",
             meta_keywords: pageContent.metaKeywords || "",
-            page_text_snippet: pageContent.bodyTextSnippet || "",
+            page_text_snippet: pageContent.pageText || "",
             session_focus: sessionFocus,
         };
         
@@ -525,11 +655,11 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
             await chrome.storage.local.set({ lastAssessmentText: assessmentTextToStore });
         }
         
-        // Send assessment result to other parts of the extension (e.g., popup)
         chrome.runtime.sendMessage({ type: "ASSESSMENT_RESULT_TEXT", assessmentText: assessmentTextToStore })
             .catch(e => console.warn(`Background (ID: ${bjsProcessingId}): Error sending ASSESSMENT_RESULT_TEXT post backend call: ${e.message}`));
 
-        iconPathToSet = assessmentTextToStore === "Relevant" ? "icons/icon_relevant48.png" : (assessmentTextToStore === "Irrelevant" ? "icons/icon_irrelevant48.png" : "icons/icon_error48.png" );
+        // iconPathToSet is determined by assessmentTextToStore, then passed to refreshIconForTab implicitly
+        refreshIconForTab(tabId, assessmentTextToStore);
         
         // --- Trigger "Off Focus" Modal ---
         if (assessmentTextToStore === "Irrelevant") {
@@ -546,18 +676,7 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
         await chrome.storage.local.set({ lastAssessmentText: assessmentTextToStore }); // Store "Error"
         chrome.runtime.sendMessage({ type: "ASSESSMENT_RESULT_TEXT", assessmentText: assessmentTextToStore })
              .catch(e => console.warn(`Background (ID: ${bjsProcessingId}): Error sending ASSESSMENT_RESULT_TEXT after backend error: ${e.message}`));
-    } finally {
-        try {
-            const tab = await chrome.tabs.get(tabId).catch(() => null);
-            if (tab) {
-                await chrome.action.setIcon({ path: iconPathToSet, tabId: tabId });
-            } else {
-                console.warn(`Background (ID: ${bjsProcessingId}): Tab ${tabId} not found for icon update. Setting global icon.`);
-                await chrome.action.setIcon({ path: iconPathToSet });
-            }
-        } catch (iconError) {
-            console.error(`Background (ID: ${bjsProcessingId}): Failed to set icon ${iconPathToSet} for tab ${tabId}:`, iconError);
-        }
+        refreshIconForTab(tabId, assessmentTextToStore); // Update icon on error too
     }
 }
 
@@ -572,6 +691,7 @@ function triggerCurrentTabAnalysis(reasonForAnalysis) {
             const tab = tabs[0];
             console.log(`Background: Requesting content update from active tab ${tab.id} (${tab.url.substring(0,70)}) due to ${reasonForAnalysis}`);
             handlePotentialNavigation(tab.id, tab.url, tab.title || "", `triggerCurrentTabAnalysis:${reasonForAnalysis}`);
+            refreshIconForTab(tab.id); // Refresh icon when analysis is triggered for current tab
         } else {
             console.log("Background: No active HTTP/S tab found to trigger analysis for reason:", reasonForAnalysis);
         }

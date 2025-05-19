@@ -319,4 +319,10 @@ button:active {
   text-align: center;
   margin-top: 0.25rem;
   min-height: 1.3em;
+}
+
+/* Pomodoro input error styling */
+.pomodoro-inputs input[type="number"].input-error-temp {
+    border-color: var(--rui-accent-danger) !important;
+    box-shadow: 0 0 0 3px var(--rui-focus-danger) !important;
 } 

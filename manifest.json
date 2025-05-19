@@ -10,13 +10,21 @@
       "activeTab",
       "webNavigation",
       "alarms",
-      "notifications"
+      "notifications",
+      "identity"
     ],
     "host_permissions": [
       "http://*/*",
       "https://*/*",
-      "http://localhost:5001/*"
+      "https://specific-focus-backend-1056415616503.europe-west1.run.app/*"
     ],
+    "oauth2": {
+      "client_id": "YOUR_OAUTH_CLIENT_ID_HERE.apps.googleusercontent.com",
+      "scopes": [
+        "email",
+        "profile"
+      ]
+    },
     "background": {
       "service_worker": "background.js"
     },
