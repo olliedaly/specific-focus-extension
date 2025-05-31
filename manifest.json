@@ -19,7 +19,7 @@
       "https://specific-focus-backend-1056415616503.europe-west1.run.app/*"
     ],
     "oauth2": {
-      "client_id": "YOUR_OAUTH_CLIENT_ID_HERE.apps.googleusercontent.com",
+      "client_id": "1056415616503-jagk9ejnakcq643so5dsfvsoagjppfac.apps.googleusercontent.com",
       "scopes": [
         "email",
         "profile"
@@ -47,5 +47,6 @@
         "js": ["lib/Readability.js", "content.js"],
         "run_at": "document_idle"
       }
-    ]
+    ],
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAptjJmvMg26YN6hfhQiuRXCrcy3IZr2sPQ7dG4iGxG1b3+8UDmjLxX84UAD3M7fQ6yabXcJR/NNOv0qc026d186CdzaKhZQPKh+ZMnbIEgwfyvHe9B84pzF4Dr95DGIB36GFpfP0UzKdnzzJ6Y3hH8GjCHcc30VlkPBpy54yKn3k2sQNhcsVcLBSClM//aIrWtB4BnVMzR+AUs98CiPusUQ4RDiPOsGeU+4WQq8BAk/W1bXePlE1DQ+wkaLgUdtyoQxkIW/oWWtlLkx0+asGFe2gU/Z59SisFK9wuXnL5BEFd8+gHvPma70Qe+AVMKRtAl4oy/Yl0+HmUgMmgtfXc2wIDAQAB"
   }

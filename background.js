@@ -595,10 +595,30 @@ async function handlePageData(tabId, pageData, receivedSource, receivedDetails =
 
 async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSource = "unknown_bjs_trigger", bjsProcessingId = "N/A_bjs_id") {
     console.log(`Background (ID: ${bjsProcessingId}): sendToBackend executing for ${pageContent.url.substring(0,70)}. Original Trigger: ${originalTriggerSource}`);
-    let iconPathToSet = "icons/icon_error48.png"; // Default to error icon
-    let assessmentTextToStore = "Error";
+    const backendUrl = "https://specific-focus-backend-1056415616503.europe-west1.run.app/classify"; // Define at the top or pass as arg if it can change
+    let assessmentTextToStore = "Error"; // Default in case of any failure before successful assessment
 
     try {
+        const token = await new Promise((resolve, reject) => {
+            chrome.identity.getAuthToken({ interactive: true }, (token) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else if (!token) {
+                    reject(new Error("Failed to retrieve auth token, token is empty."));
+                } else {
+                    resolve(token);
+                }
+            });
+        });
+
+        if (!token) { // Should be caught by the promise rejection, but as a safeguard
+            console.error(`Background (ID: ${bjsProcessingId}): Failed to get auth token. Aborting backend call for ${pageContent.url.substring(0,70)}.`);
+            assessmentTextToStore = "AuthError";
+            throw new Error("Authentication token not available."); // This will be caught by the outer try-catch
+        }
+        
+        console.log(`Background (ID: ${bjsProcessingId}): Auth token retrieved successfully for backend call.`);
+
         const payload = {
             url: pageContent.url,
             title: pageContent.title || "",
@@ -610,9 +630,12 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
         
         console.log(`%cBackground (ID: ${bjsProcessingId}): ----> MAKING ACTUAL BACKEND CALL for ${pageContent.url.substring(0,70)}. Trigger: ${originalTriggerSource}. Focus: "${sessionFocus}". Title: "${payload.title.substring(0,50)}". MetaDesc: "${(payload.meta_description || '').substring(0,50)}". Snippet: "${(payload.page_text_snippet || '').substring(0,50)}"`, "color: blue; font-weight: bold;");
 
-        const response = await fetch(BACKEND_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        const response = await fetch(backendUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + token
+            },
             body: JSON.stringify(payload),
         });
 
@@ -672,8 +695,11 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
 
     } catch (error) {
         console.error(`Background (ID: ${bjsProcessingId}): Error in sendToBackend for ${pageContent.url.substring(0,70)} (Trigger: ${originalTriggerSource}):`, error);
-        // assessmentTextToStore is already "Error"
-        await chrome.storage.local.set({ lastAssessmentText: assessmentTextToStore }); // Store "Error"
+        // assessmentTextToStore is already "Error" or "AuthError" if token failed
+        if (error.message.includes("token")) { // more specific error for token issues
+            assessmentTextToStore = "AuthError";
+        }
+        await chrome.storage.local.set({ lastAssessmentText: assessmentTextToStore }); // Store appropriate error
         chrome.runtime.sendMessage({ type: "ASSESSMENT_RESULT_TEXT", assessmentText: assessmentTextToStore })
              .catch(e => console.warn(`Background (ID: ${bjsProcessingId}): Error sending ASSESSMENT_RESULT_TEXT after backend error: ${e.message}`));
         refreshIconForTab(tabId, assessmentTextToStore); // Update icon on error too
