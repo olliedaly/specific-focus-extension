@@ -7,6 +7,14 @@ const sessionTimerDiv = document.getElementById('sessionTimer');
 const pauseSessionButton = document.getElementById('pauseSessionButton');
 const dailyTotalDisplayDiv = document.getElementById('dailyTotalDisplay');
 
+// Subscription UI Elements
+const remainingCallsSpan = document.getElementById('remainingCalls');
+const upgradeSection = document.getElementById('upgradeSection');
+const premiumStatus = document.getElementById('premiumStatus');
+const upgradeButton = document.getElementById('upgradeButton');
+const upgradeButtonSmall = document.getElementById('upgradeButtonSmall');
+const freeUsageDisplay = document.getElementById('freeUsageDisplay');
+
 // Pomodoro UI Elements
 const pomodoroControlSection = document.querySelector('.pomodoro-control');
 const workDurationInput = document.getElementById('workDuration');
@@ -76,6 +84,81 @@ function updateDailyTotalDisplay() {
         const totalMs = result[todayKey] || 0;
         dailyTotalDisplayDiv.textContent = `Time focused today: ${formatTime(totalMs)}`;
     });
+}
+
+// Payment and Subscription Functions
+async function updateSubscriptionStatus() {
+    try {
+        const token = await new Promise((resolve) => {
+            chrome.identity.getAuthToken({interactive: false}, (token) => {
+                resolve(token);
+            });
+        });
+
+        if (token) {
+            const response = await fetch('https://specific-focus-backend-1056415616503.europe-west1.run.app/user-status', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const userStatus = await response.json();
+                const remainingCalls = Math.max(0, 50 - userStatus.api_request_count);
+                
+                remainingCallsSpan.textContent = remainingCalls;
+
+                if (userStatus.is_premium) {
+                    // Premium user
+                    freeUsageDisplay.style.display = 'none';
+                    upgradeSection.style.display = 'none';
+                    premiumStatus.style.display = 'block';
+                } else if (remainingCalls <= 0) {
+                    // Free user, no calls left - show big upgrade section
+                    freeUsageDisplay.style.display = 'none';
+                    upgradeSection.style.display = 'block';
+                    premiumStatus.style.display = 'none';
+                } else {
+                    // Free user with calls remaining - show small upgrade button
+                    freeUsageDisplay.style.display = 'block';
+                    upgradeSection.style.display = 'none';
+                    premiumStatus.style.display = 'none';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error updating subscription status:', error);
+        // Show fallback state - assume free user with small upgrade button
+        remainingCallsSpan.textContent = '--';
+        freeUsageDisplay.style.display = 'block';
+        upgradeSection.style.display = 'none';
+        premiumStatus.style.display = 'none';
+    }
+}
+
+async function handleUpgradeClick() {
+    try {
+        const token = await new Promise((resolve) => {
+            chrome.identity.getAuthToken({interactive: false}, (token) => {
+                resolve(token);
+            });
+        });
+
+        const user = await new Promise((resolve) => {
+            chrome.identity.getProfileUserInfo((userInfo) => {
+                resolve(userInfo);
+            });
+        });
+
+        // Open upgrade page in new tab
+        const upgradeUrl = `https://specific-focus-backend-1056415616503.europe-west1.run.app/upgrade?token=${token}&user_id=${user.id}`;
+        chrome.tabs.create({ url: upgradeUrl });
+        
+    } catch (error) {
+        console.error('Error opening upgrade page:', error);
+        alert('Error opening upgrade page. Please try again.');
+    }
 }
 
 function setRelevanceAppearance(assessmentText) {
@@ -210,6 +293,8 @@ const keysToFetch = [
 ];
 chrome.storage.local.get(keysToFetch, (result) => {
     updatePopupUI(result);
+    // Initialize subscription status
+    updateSubscriptionStatus();
 });
 
 startPomodoroButton.addEventListener('click', () => {
@@ -343,6 +428,10 @@ stopPomodoroButton.addEventListener('click', () => {
         }
     });
 });
+
+// Upgrade button event listeners - both buttons use the same handler
+upgradeButton.addEventListener('click', handleUpgradeClick);
+upgradeButtonSmall.addEventListener('click', handleUpgradeClick);
 
 // Listen for updates from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

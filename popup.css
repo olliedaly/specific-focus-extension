@@ -252,6 +252,74 @@ button:active {
   display: none !important;
 }
 
+/* Subscription Section */
+.subscription-section {
+  margin-bottom: 15px;
+  padding: 12px;
+  background-color: var(--rui-bg-primary);
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--rui-border-primary);
+}
+
+#freeUsageDisplay {
+  font-size: 0.8rem;
+  color: var(--rui-text-secondary);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.upgrade-small {
+  background-color: transparent;
+  border: 1px solid #ff6b35;
+  color: #ff6b35;
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  margin-top: 6px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.upgrade-small:hover {
+  background-color: #ff6b35;
+  color: white;
+  transform: scale(1.02);
+}
+
+#upgradeSection {
+  text-align: center;
+}
+
+#upgradeSection p {
+  margin: 8px 0;
+  color: var(--rui-accent-danger);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+#upgradeButton {
+  background-color: #ff6b35;
+  border-color: #ff6b35;
+  color: white;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  width: 100%;
+}
+
+#upgradeButton:hover {
+  background-color: #e55a2e;
+  border-color: #e55a2e;
+}
+
+.premium-badge {
+  color: #ff6b35;
+  font-weight: bold;
+  font-size: 0.9rem;
+  display: block;
+  text-align: center;
+}
+
 /* Adjustments for buttons that might appear next to each other if we change layout later */
 /* For now, they are mostly stacked due to flex-direction column on sections */
 

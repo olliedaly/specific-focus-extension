@@ -12,6 +12,23 @@
       <div id="dailyTotalDisplay">Time focused today: 00:00:00</div>
     </header>
 
+    <!-- Subscription Status Section -->
+    <section class="subscription-section">
+      <div id="subscriptionStatus">
+        <div id="freeUsageDisplay">
+          <div>Free calls: <span id="remainingCalls">--</span>/50</div>
+          <button id="upgradeButtonSmall" class="upgrade-small">Upgrade to unlimited 🚀</button>
+        </div>
+        <div id="upgradeSection" style="display:none;">
+          <p>You've used all your free API calls!</p>
+          <button id="upgradeButton">Upgrade to Premium - $4.99/month</button>
+        </div>
+        <div id="premiumStatus" style="display:none;">
+          <span class="premium-badge">✨ Premium Active</span>
+        </div>
+      </div>
+    </section>
+
     <section class="session-control">
       <input type="text" id="focusPrompt" placeholder="What's your focus today?">
   <button id="startSession">Start Session</button>
