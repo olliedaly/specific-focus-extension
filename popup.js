@@ -145,14 +145,19 @@ async function handleUpgradeClick() {
             });
         });
 
-        const user = await new Promise((resolve) => {
-            chrome.identity.getProfileUserInfo((userInfo) => {
-                resolve(userInfo);
-            });
-        });
+        // Get user ID from token validation (like backend does)
+        const tokenInfoUrl = `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`;
+        const response = await fetch(tokenInfoUrl);
+        const tokenInfo = await response.json();
+        
+        if (tokenInfo.error) {
+            throw new Error('Invalid token');
+        }
+        
+        const userId = tokenInfo.sub; // 'sub' is the user ID in Google's token info
 
         // Open upgrade page in new tab
-        const upgradeUrl = `https://specific-focus-backend-1056415616503.europe-west1.run.app/upgrade?token=${token}&user_id=${user.id}`;
+        const upgradeUrl = `https://specific-focus-backend-1056415616503.europe-west1.run.app/upgrade?token=${token}&user_id=${userId}`;
         chrome.tabs.create({ url: upgradeUrl });
         
     } catch (error) {

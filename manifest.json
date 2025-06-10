@@ -52,7 +52,9 @@
         "exclude_matches": [
           "*://localhost/*",
           "*://127.0.0.1/*",
-          "*://*.local/*"
+          "*://*.local/*",
+          "*://specific-focus-backend-1056415616503.europe-west1.run.app/upgrade*",
+          "*://specific-focus-backend-1056415616503.europe-west1.run.app/payment-success*"
         ]
       }
     ],
