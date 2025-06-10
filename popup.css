@@ -14,6 +14,11 @@
   --rui-accent-green-text: #FFFFFF; /* Text on green accent */
   --rui-focus-green: rgba(106, 138, 123, 0.25);
 
+  --rui-accent-yellow: #B8A56B;     /* Muted golden yellow for pause actions */
+  --rui-accent-yellow-hover: #A4915A;
+  --rui-accent-yellow-text: #FFFFFF; /* Text on yellow accent */
+  --rui-focus-yellow: rgba(184, 165, 107, 0.25);
+
   --rui-accent-danger: #D47E64;     /* Muted terracotta/red */
   --rui-accent-danger-hover: #BF6A51;
   --rui-accent-danger-text: #FFFFFF;
@@ -33,296 +38,236 @@
 
 body {
   font-family: var(--font-family-main);
-  width: 300px;
-  margin: 0;
-  background-color: var(--rui-bg-primary);
+  background-color: transparent;
   color: var(--rui-text-primary);
-  font-size: 14px; /* Common base for UIs like Raindrop */
+  margin: 0;
+  width: 380px; /* Similar to modal, can adjust */
+  box-sizing: border-box;
+  line-height: 1.5;
 }
 
 .popup-container {
-  padding: 16px;
+  background-color: var(--rui-bg-card);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-strong);
+  padding: 20px 24px;
+  border: 1px solid var(--rui-border-primary); /* Subtle border like modal card */
+  width: 100%;
+  min-height: auto; /* Let content determine height naturally */
+  box-sizing: border-box;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 20px;
 }
 
 header h1 {
   font-size: 1.25rem; /* 20px */
+  color: var(--rui-text-primary);
+  margin: 0 0 5px 0;
   font-weight: 600;
-  color: var(--rui-text-primary);
-  text-align: center;
-  margin-top: 0;
-  margin-bottom: 20px;
-}
-
-.session-control, .session-active-view {
-  background-color: var(--rui-bg-card);
-  padding: 16px;
-  border-radius: var(--border-radius-md);
-  box-shadow: var(--shadow-subtle);
-  margin-bottom: 16px;
-  border: 1px solid var(--rui-border-primary);
-}
-
-input[type="text"]#focusPrompt {
-  width: 100%;
-  padding: 10px 12px;
-  margin-bottom: 10px;
-  border: 1px solid var(--rui-border-input);
-  border-radius: var(--border-radius-sm);
-  box-sizing: border-box;
-  font-size: 0.95rem; /* 15.2px */
-  background-color: var(--rui-bg-input);
-  color: var(--rui-text-primary);
-  transition: border-color var(--transition-common), box-shadow var(--transition-common);
-}
-
-input[type="text"]#focusPrompt::placeholder {
-  color: var(--rui-text-placeholder);
-}
-
-input[type="text"]#focusPrompt:hover {
-    border-color: var(--rui-text-secondary);
-}
-
-input[type="text"]#focusPrompt:focus {
-  border-color: var(--rui-border-input-focus);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--rui-focus-green);
-}
-
-input[type="text"]#focusPrompt.input-error-temp {
-    border-color: var(--rui-accent-danger) !important;
-    box-shadow: 0 0 0 3px var(--rui-focus-danger) !important;
-}
-input[type="text"]#focusPrompt.input-error-temp::placeholder {
-    color: var(--rui-accent-danger);
-}
-
-button {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid transparent; /* For consistent height, can be colored for secondary */
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.9rem; /* 14.4px */
-  transition: background-color var(--transition-common), border-color var(--transition-common), color var(--transition-common), transform 0.1s ease;
-  text-align: center;
-}
-
-button:focus {
-  outline: none;
-}
-button:active {
-    transform: scale(0.98);
-}
-
-#startSession {
-  background-color: var(--rui-accent-green);
-  border-color: var(--rui-accent-green);
-  color: var(--rui-accent-green-text);
-  margin-bottom: 0;
-  font-weight: 600;
-}
-#startSession:hover {
-  background-color: var(--rui-accent-green-hover);
-  border-color: var(--rui-accent-green-hover);
-}
-#startSession:focus {
-  box-shadow: 0 0 0 3px var(--rui-focus-green);
-}
-
-
-#endSession {
-  background-color: transparent;
-  color: var(--rui-accent-danger);
-  border: 1px solid var(--rui-border-input); /* Subtle border for secondary action */
-  margin-top: 12px; 
-}
-#endSession:hover {
-  background-color: var(--rui-accent-danger);
-  color: var(--rui-accent-danger-text);
-  border-color: var(--rui-accent-danger);
-}
-#endSession:focus {
-   box-shadow: 0 0 0 3px var(--rui-focus-danger);
-   border-color: var(--rui-accent-danger);
-}
-
-#pauseSessionButton {
-  background-color: var(--rui-text-secondary); /* Neutral/secondary color */
-  color: var(--rui-bg-primary);
-  margin-top: 12px;
-  border: 1px solid var(--rui-text-secondary);
-}
-#pauseSessionButton:hover {
-  background-color: var(--rui-text-primary);
-  border-color: var(--rui-text-primary);
-}
-#pauseSessionButton:focus {
-  box-shadow: 0 0 0 3px rgba(122, 107, 96, 0.3); /* Focus ring for pause button */
-  border-color: var(--rui-text-primary);
-}
-
-#status {
-  font-size: 0.875rem; /* 14px */
-  color: var(--rui-text-secondary);
-  margin-bottom: 8px;
-  text-align: center;
-  min-height: 1.2em; 
-  word-wrap: break-word;
-}
-
-#sessionTimer {
-  font-size: 1.4rem; /* Larger for timer */
-  font-weight: 600;
-  color: var(--rui-text-primary);
-  text-align: center;
-  margin: 8px 0 12px 0;
-  padding: 8px;
-  background-color: var(--rui-bg-input); /* Subtle background */
-  border-radius: var(--border-radius-sm);
-  border: 1px solid var(--rui-border-primary);
-}
-
-#relevance {
-  font-size: 0.9rem; /* 14.4px */
-  font-weight: 500;
-  text-align: center;
-  padding: 8px 10px;
-  border-radius: var(--border-radius-sm);
-  background-color: var(--rui-bg-input);
-  min-height: 1.5em; 
-  margin-top: 4px;
-  border: 1px solid var(--rui-border-primary);
-  transition: background-color var(--transition-common), border-color var(--transition-common), color var(--transition-common);
-  color: var(--rui-text-primary);
-}
-
-/* Relevance status styling */
-#relevance.relevant {
-  background-color: #E6F3E4; /* Softer green derived from accent */
-  border-color: var(--rui-accent-green);
-  color: var(--rui-accent-green-hover); 
-}
-
-#relevance.irrelevant {
-  background-color: #FBEEEA; /* Softer red/terracotta derived */
-  border-color: var(--rui-accent-danger);
-  color: var(--rui-accent-danger-hover);
-}
-
-#relevance.error {
-  background-color: #FFF8E1; /* Light, soft yellow */
-  border-color: #FFC107; /* Amber for error border */
-  color: #B38600; /* Darker yellow text */
 }
 
 #dailyTotalDisplay {
-  font-size: 0.8rem; /* Smaller than main status */
+  font-size: 0.8rem; /* 13px */
+  color: var(--rui-text-secondary);
+}
+
+section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--rui-border-primary);
+}
+section:last-child {
+  margin-bottom: 5px; /* Minimal bottom spacing for better balance */
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+input[type="text"],
+input[type="number"] {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--rui-border-input);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--rui-bg-input);
+  color: var(--rui-text-primary);
+  font-family: var(--font-family-main);
+  font-size: 0.9rem;
+  box-sizing: border-box;
+  transition: border-color var(--transition-common), box-shadow var(--transition-common);
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+  border-color: var(--rui-border-input-focus);
+  box-shadow: 0 0 0 2px var(--rui-focus-green);
+  outline: none;
+}
+
+button {
+  padding: 10px 18px;
+  min-width: 100px;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: background-color var(--transition-common), border-color var(--transition-common), color var(--transition-common), transform 0.1s ease;
+  text-align: center;
+  margin-top: 5px; /* Add some top margin for buttons that follow inputs */
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Primary action button (like "Start Session", "Start Pomodoro") */
+#startSession,
+#startPomodoro {
+  background-color: var(--rui-accent-green);
+  border-color: var(--rui-accent-green);
+  color: var(--rui-accent-green-text);
+  width: 100%; /* Make primary session button full width */
+}
+
+#startSession:hover,
+#startPomodoro:hover {
+  background-color: var(--rui-accent-green-hover);
+  border-color: var(--rui-accent-green-hover);
+}
+
+/* Pause Session button - Yellow styling */
+#pauseSessionButton {
+  background-color: var(--rui-accent-yellow);
+  border-color: var(--rui-accent-yellow);
+  color: var(--rui-accent-yellow-text);
+  width: 100%; /* Make these full width as well for consistency in their sections */
+  margin-top: 10px; /* Space them out if multiple */
+}
+
+#pauseSessionButton:hover {
+  background-color: var(--rui-accent-yellow-hover);
+  border-color: var(--rui-accent-yellow-hover);
+}
+
+/* End Session button - Red styling */
+#endSession {
+  background-color: var(--rui-accent-danger);
+  border-color: var(--rui-accent-danger);
+  color: var(--rui-accent-danger-text);
+  width: 100%; /* Make these full width as well for consistency in their sections */
+  margin-top: 10px; /* Space them out if multiple */
+}
+
+#endSession:hover {
+  background-color: var(--rui-accent-danger-hover);
+  border-color: var(--rui-accent-danger-hover);
+}
+
+/* Other secondary/destructive buttons (like "Stop Pomodoro") */
+#stopPomodoro {
+  background-color: var(--rui-bg-input);
+  border-color: var(--rui-border-input);
+  color: var(--rui-text-secondary);
+  width: 100%; /* Make these full width as well for consistency in their sections */
+  margin-top: 10px; /* Space them out if multiple */
+}
+
+#stopPomodoro:hover {
+  background-color: var(--rui-border-primary);
+  color: var(--rui-text-primary);
+}
+
+.session-control, .session-active-view, .pomodoro-control {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-active-view #status,
+.session-active-view #relevance,
+.session-active-view #sessionTimer {
+  font-size: 0.9rem;
   color: var(--rui-text-secondary);
   text-align: center;
-  margin-top: -1.25rem; /* Pull it up a bit under the main title */
-  margin-bottom: 1.25rem;
-  padding: 0.25rem 0.5rem;
-  background-color: rgba(0,0,0,0.03); /* Very subtle background */
+  padding: 5px;
+  background-color: var(--rui-bg-primary);
   border-radius: var(--border-radius-sm);
 }
 
-/* Pomodoro Styles */
-.pomodoro-control {
-  background-color: var(--earthy-card-bg); /* Same as other cards */
-  padding: 1.25rem;
-  border-radius: var(--border-radius-md);
-  box-shadow: var(--shadow-subtle);
-  margin-top: 1rem; /* Space from the main session view */
-  border: 1px solid var(--rui-border-primary);
+.session-active-view #sessionTimer {
+  font-size: 1.5rem; /* Larger for timer display */
+  font-weight: 600;
+  color: var(--rui-text-primary);
+  margin-bottom: 10px;
 }
 
 .pomodoro-control h2 {
-  font-size: 1.1rem;
+  font-size: 1rem; /* 16px */
   color: var(--rui-text-primary);
-  margin-top: 0;
-  margin-bottom: 1rem;
+  margin-bottom: 10px;
   text-align: center;
+  font-weight: 600;
 }
 
 .pomodoro-inputs {
   display: flex;
-  justify-content: space-around;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 15px;
+  align-items: center;
+  justify-content: space-between; /* Space out input groups */
+  margin-bottom: 10px;
 }
 
-.pomodoro-inputs div {
+.pomodoro-inputs > div {
+  flex: 1; /* Allow them to share space */
   display: flex;
   flex-direction: column;
-  align-items: center; /* Center labels and inputs */
 }
 
 .pomodoro-inputs label {
   font-size: 0.8rem;
   color: var(--rui-text-secondary);
-  margin-bottom: 0.25rem;
+  margin-bottom: 4px;
 }
 
-.pomodoro-inputs input[type="number"] {
-  width: 60px; /* Fixed width for duration inputs */
-  padding: 0.5rem;
-  border: 1px solid var(--rui-border-input);
-  border-radius: var(--border-radius-sm);
-  text-align: center;
+#pomodoroStatus,
+#pomodoroTimerDisplay {
   font-size: 0.9rem;
-  background-color: var(--rui-bg-input);
-  color: var(--rui-text-primary);
-  -moz-appearance: textfield; /* Hides spinners in Firefox */
-}
-
-.pomodoro-inputs input[type="number"]::-webkit-outer-spin-button,
-.pomodoro-inputs input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0; /* Hides spinners in Chrome, Safari, Edge */
-}
-
-.pomodoro-inputs input[type="number"]:focus {
-  border-color: var(--rui-accent-green);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--rui-focus-green);
-}
-
-#startPomodoro, #stopPomodoro {
-  margin-top: 0.5rem;
-  /* Can use accent colors or more neutral ones */
-}
-
-#stopPomodoro {
-    background-color: var(--rui-text-secondary); /* Neutral stop */
-    color: var(--rui-bg-primary);
-    border-color: var(--rui-text-secondary);
-}
-#stopPomodoro:hover {
-    background-color: var(--rui-text-primary);
-    border-color: var(--rui-text-primary);
-}
-
-#pomodoroStatus {
-  font-size: 0.85rem;
   color: var(--rui-text-secondary);
   text-align: center;
-  margin-top: 0.75rem;
-  min-height: 1.1em;
+  margin-top: 10px;
 }
 
 #pomodoroTimerDisplay {
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   font-weight: 600;
-  color: var(--rui-accent-green);
-  text-align: center;
-  margin-top: 0.25rem;
-  min-height: 1.3em;
+  color: var(--rui-text-primary);
 }
 
-/* Pomodoro input error styling */
-.pomodoro-inputs input[type="number"].input-error-temp {
-    border-color: var(--rui-accent-danger) !important;
-    box-shadow: 0 0 0 3px var(--rui-focus-danger) !important;
-} 
+/* Hide utility class */
+.hidden {
+  display: none !important;
+}
+
+/* Adjustments for buttons that might appear next to each other if we change layout later */
+/* For now, they are mostly stacked due to flex-direction column on sections */
+
+/* If you want input and button on the same line for session control: */
+/*
+.session-control {
+    flex-direction: row;
+    align-items: center;
+}
+.session-control input[type="text"] {
+    flex-grow: 1;
+    margin-bottom: 0; 
+    margin-right: 10px;
+}
+.session-control button {
+    margin-top: 0;
+    width: auto; 
+}
+*/ 

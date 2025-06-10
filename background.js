@@ -1,14 +1,25 @@
 const BACKEND_URL = "https://specific-focus-backend-1056415616503.europe-west1.run.app/classify";
 let currentSessionFocus = null;
 let lastProcessedUrlTimestamp = {};
-const PROCESS_COOLDOWN = 3000; // ms
+const PROCESS_COOLDOWN = 1500; // ms - REDUCED from 3000ms for faster responsiveness
 let currentlyProcessingUrl = {};
 const FOCUS_WHITELIST_KEY = 'focusWhitelist';
 const LAST_RELEVANT_URL_KEY = 'lastRelevantUrlForFocus';
 let lastRelevantUrl = null;
 
-const STICKY_RELEVANT_DURATION = 7000; // 7 seconds
-let recentAssessmentsCache = {}; // In-memory cache: { url: { assessment: "Relevant", timestamp: Date.now() } }
+const PREMIUM_SKU_ID = "premium_focus_unlimited";
+
+// ENHANCED CACHING SYSTEM
+const STICKY_RELEVANT_DURATION = 15000; // 15 seconds - INCREASED from 7s for better UX
+const GLOBAL_CACHE_DURATION = 300000; // 5 minutes - Cache assessments across focus sessions
+let recentAssessmentsCache = {}; // Enhanced cache
+let globalAssessmentCache = {}; // Persistent cache across sessions
+
+// SMART REQUEST MANAGEMENT  
+let pendingRequests = new Map(); // Deduplicate identical requests
+let requestQueue = []; // Queue for managing API call rate
+const MAX_CONCURRENT_REQUESTS = 2;
+let activeRequestCount = 0;
 
 // Session Timer State Keys
 const SESSION_START_TIME_KEY = 'sessionStartTime';
@@ -593,60 +604,169 @@ async function handlePageData(tabId, pageData, receivedSource, receivedDetails =
     }
 }
 
+// Smart request deduplication and caching
+function getCacheKey(url, sessionFocus) {
+    return `${url}|${sessionFocus}`;
+}
+
+function checkGlobalCache(url, sessionFocus) {
+    const cacheKey = getCacheKey(url, sessionFocus);
+    const cached = globalAssessmentCache[cacheKey];
+    if (cached && (Date.now() - cached.timestamp < GLOBAL_CACHE_DURATION)) {
+        console.log(`%cBackground: Global cache HIT for ${url.substring(0, 50)}... (${cached.assessment})`, "color: green; font-weight: bold;");
+        return cached.assessment;
+    }
+    return null;
+}
+
+function updateGlobalCache(url, sessionFocus, assessment) {
+    const cacheKey = getCacheKey(url, sessionFocus);
+    globalAssessmentCache[cacheKey] = {
+        assessment,
+        timestamp: Date.now()
+    };
+    
+    // Cleanup old cache entries periodically
+    if (Object.keys(globalAssessmentCache).length > 1000) {
+        const entries = Object.entries(globalAssessmentCache);
+        const cutoff = Date.now() - GLOBAL_CACHE_DURATION;
+        entries.forEach(([key, data]) => {
+            if (data.timestamp < cutoff) {
+                delete globalAssessmentCache[key];
+            }
+        });
+    }
+}
+
 async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSource = "unknown_bjs_trigger", bjsProcessingId = "N/A_bjs_id") {
     console.log(`Background (ID: ${bjsProcessingId}): sendToBackend executing for ${pageContent.url.substring(0,70)}. Original Trigger: ${originalTriggerSource}`);
-    const backendUrl = "https://specific-focus-backend-1056415616503.europe-west1.run.app/classify"; // Define at the top or pass as arg if it can change
-    let assessmentTextToStore = "Error"; // Default in case of any failure before successful assessment
+    
+    // FAST PATH: Check global cache first
+    const cachedAssessment = checkGlobalCache(pageContent.url, sessionFocus);
+    if (cachedAssessment) {
+        console.log(`%cBackground (ID: ${bjsProcessingId}): Returning cached assessment: ${cachedAssessment}`, "color: green; font-weight: bold;");
+        
+        // Update local structures and UI immediately
+        recentAssessmentsCache[pageContent.url] = { assessment: cachedAssessment, timestamp: Date.now() };
+        await chrome.storage.local.set({ lastAssessmentText: cachedAssessment });
+        
+        if (cachedAssessment === "Relevant") {
+            lastRelevantUrl = pageContent.url;
+            await chrome.storage.local.set({ [LAST_RELEVANT_URL_KEY]: lastRelevantUrl });
+        }
+        
+        refreshIconForTab(tabId, cachedAssessment);
+        chrome.runtime.sendMessage({ type: "ASSESSMENT_RESULT_TEXT", assessmentText: cachedAssessment })
+            .catch(e => console.warn(`Background: Error sending cached result: ${e.message}`));
+        
+        delete currentlyProcessingUrl[pageContent.url];
+        return;
+    }
 
-    try {
+    // REQUEST DEDUPLICATION: Check if same request is already in progress
+    const requestKey = `${pageContent.url}|${sessionFocus}`;
+    if (pendingRequests.has(requestKey)) {
+        console.log(`%cBackground (ID: ${bjsProcessingId}): Duplicate request detected, waiting for existing request...`, "color: orange;");
+        try {
+            const result = await pendingRequests.get(requestKey);
+            console.log(`%cBackground (ID: ${bjsProcessingId}): Received result from deduplicated request: ${result}`, "color: orange;");
+            delete currentlyProcessingUrl[pageContent.url];
+            return;
+        } catch (error) {
+            console.error(`Background (ID: ${bjsProcessingId}): Error waiting for deduplicated request:`, error);
+        }
+    }
+
+    // RATE LIMITING: Queue request if too many concurrent requests
+    if (activeRequestCount >= MAX_CONCURRENT_REQUESTS) {
+        console.log(`%cBackground (ID: ${bjsProcessingId}): Rate limiting - queuing request`, "color: yellow;");
+        return new Promise((resolve) => {
+            requestQueue.push(() => {
+                resolve(sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSource, bjsProcessingId));
+            });
+        });
+    }
+
+    let assessmentTextToStore = "Error";
+    const requestPromise = (async () => {
+        activeRequestCount++;
+        
+        try {
         const token = await new Promise((resolve, reject) => {
             chrome.identity.getAuthToken({ interactive: true }, (token) => {
                 if (chrome.runtime.lastError) {
                     reject(new Error(chrome.runtime.lastError.message));
-                } else if (!token) {
-                    reject(new Error("Failed to retrieve auth token, token is empty."));
                 } else {
                     resolve(token);
                 }
             });
         });
 
-        if (!token) { // Should be caught by the promise rejection, but as a safeguard
-            console.error(`Background (ID: ${bjsProcessingId}): Failed to get auth token. Aborting backend call for ${pageContent.url.substring(0,70)}.`);
-            assessmentTextToStore = "AuthError";
-            throw new Error("Authentication token not available."); // This will be caught by the outer try-catch
+        if (!token) {
+            console.error(`Background (ID: ${bjsProcessingId}): OAuth token is null or undefined. Cannot send to backend for ${pageContent.url}.`);
+            assessmentTextToStore = "Auth Error";
+            await chrome.storage.local.set({ lastAssessmentText: assessmentTextToStore });
+            await refreshIconForTab(tabId, assessmentTextToStore);
+            delete currentlyProcessingUrl[pageContent.url];
+            return;
         }
-        
-        console.log(`Background (ID: ${bjsProcessingId}): Auth token retrieved successfully for backend call.`);
 
-        const payload = {
-            url: pageContent.url,
-            title: pageContent.title || "",
-            meta_description: pageContent.metaDescription || "",
-            meta_keywords: pageContent.metaKeywords || "",
-            page_text_snippet: pageContent.pageText || "",
-            session_focus: sessionFocus,
-        };
-        
-        console.log(`%cBackground (ID: ${bjsProcessingId}): ----> MAKING ACTUAL BACKEND CALL for ${pageContent.url.substring(0,70)}. Trigger: ${originalTriggerSource}. Focus: "${sessionFocus}". Title: "${payload.title.substring(0,50)}". MetaDesc: "${(payload.meta_description || '').substring(0,50)}". Snippet: "${(payload.page_text_snippet || '').substring(0,50)}"`, "color: blue; font-weight: bold;");
-
-        const response = await fetch(backendUrl, {
-            method: "POST",
+        const response = await fetch(BACKEND_URL, {
+            method: 'POST',
             headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + token
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+                url: pageContent.url,
+                title: pageContent.title,
+                meta_description: pageContent.metaDescription,
+                meta_keywords: pageContent.metaKeywords,
+                page_text_snippet: pageContent.bodyTextSnippet,
+                session_focus: sessionFocus
+            })
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Background (ID: ${bjsProcessingId}): Backend error for ${pageContent.url.substring(0,70)}: ${response.status} ${response.statusText} - ${errorText}`);
-            throw new Error(`Backend error: ${response.status} ${response.statusText}`);
+            let errorDetail = `HTTP error! Status: ${response.status}`;
+            try {
+                const errorJson = await response.json();
+                errorDetail = errorJson.detail || errorJson; // Use detail if present, otherwise the whole object
+                 if (response.status === 402) { // Payment Required
+                    console.warn(`Background (ID: ${bjsProcessingId}): API limit reached for ${pageContent.url}. Status 402. Detail:`, errorDetail);
+                    // Call handlePaymentRequired, potentially passing tabId or other relevant info
+                    handlePaymentRequired(tabId, errorDetail); // Pass tabId if needed for context post-payment
+                    assessmentTextToStore = "Limit Reached"; // Or a more user-friendly message
+                    // We might not want to set currentlyProcessingUrl to false immediately,
+                    // as the payment flow is now active. Or we might want to allow other tabs to process.
+                    // For now, let's clear it, assuming one payment flow at a time.
+                    // delete currentlyProcessingUrl[pageContent.url]; 
+                    // return; // Stop further processing for this page for now
+                }
+            } catch (e) {
+                // Failed to parse JSON, use the status text or basic detail
+                errorDetail = `HTTP error! Status: ${response.status}. Response not JSON or JSON parse error.`;
+                console.error(`Background (ID: ${bjsProcessingId}): Backend response error for ${pageContent.url}. ${errorDetail}`, e);
+            }
+            // assessmentTextToStore = `Error: ${response.status}`; // Set earlier if 402
+            if (response.status !== 402) { // Don't overwrite "Limit Reached"
+                 assessmentTextToStore = `Error: ${response.status}`;
+            }
+            await chrome.storage.local.set({ lastAssessmentText: assessmentTextToStore });
+            await refreshIconForTab(tabId, assessmentTextToStore);
+            delete currentlyProcessingUrl[pageContent.url];
+            // No throw here if it's a 402, as it's a specific flow.
+            // For other errors, if we want to propagate, we might throw here.
+            if (response.status !== 402) {
+                 console.error(`Background (ID: ${bjsProcessingId}): Throwing for non-402 error: ${errorDetail}`);
+                 // Consider if throwing is the best approach or just logging and returning.
+                 // throw new Error(typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail));
+            }
+            return; // Important to return after handling error
         }
 
-        const assessmentResult = await response.json();
-        let rawBackendAssessment = assessmentResult.assessment;
+        const data = await response.json();
+        let rawBackendAssessment = data.assessment;
         console.log(`Background (ID: ${bjsProcessingId}): Raw backend assessment for ${pageContent.url.substring(0,70)}: ${rawBackendAssessment}. (Trigger: ${originalTriggerSource})`);
 
         assessmentTextToStore = rawBackendAssessment; // Default to backend assessment
@@ -667,6 +787,9 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
 
         // Update the cache with the final assessment determined (could be overridden or direct from backend)
         recentAssessmentsCache[pageContent.url] = { assessment: assessmentTextToStore, timestamp: Date.now() };
+        
+        // Update global cache for cross-session persistence
+        updateGlobalCache(pageContent.url, sessionFocus, assessmentTextToStore);
 
         if (assessmentTextToStore === "Relevant") {
             lastRelevantUrl = pageContent.url; 
@@ -703,7 +826,24 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
         chrome.runtime.sendMessage({ type: "ASSESSMENT_RESULT_TEXT", assessmentText: assessmentTextToStore })
              .catch(e => console.warn(`Background (ID: ${bjsProcessingId}): Error sending ASSESSMENT_RESULT_TEXT after backend error: ${e.message}`));
         refreshIconForTab(tabId, assessmentTextToStore); // Update icon on error too
-    }
+        } finally {
+            // Clean up request tracking
+            activeRequestCount--;
+            pendingRequests.delete(requestKey);
+            delete currentlyProcessingUrl[pageContent.url];
+            
+            // Process queued requests
+            if (requestQueue.length > 0 && activeRequestCount < MAX_CONCURRENT_REQUESTS) {
+                const nextRequest = requestQueue.shift();
+                nextRequest();
+            }
+        }
+    })();
+
+    // Store the promise for deduplication
+    pendingRequests.set(requestKey, requestPromise);
+    
+    return requestPromise;
 }
 
 function triggerCurrentTabAnalysis(reasonForAnalysis) {
@@ -722,6 +862,103 @@ function triggerCurrentTabAnalysis(reasonForAnalysis) {
             console.log("Background: No active HTTP/S tab found to trigger analysis for reason:", reasonForAnalysis);
         }
     });
+}
+
+async function handlePaymentRequired(tabId, errorPayload) {
+    console.log(`Background: Payment required. Details:`, errorPayload);
+    // Potentially inform the user via a notification or by opening a dedicated "upgrade" page
+    // included in the extension. For now, directly trying the purchase.
+
+    try {
+        const buyResult = await chrome.payments.buy({
+            parameters: {interact: true}, // Allows user interaction
+            sku: PREMIUM_SKU_ID, // The SKU you defined in CWS Dashboard
+            // You might want to pass JWT if your backend generates it for one-time purchases
+            // or if you are verifying with your own server.
+            // For managed products, Google handles a lot.
+        });
+
+        console.log("Background: chrome.payments.buy response", buyResult);
+
+        if (chrome.runtime.lastError) {
+            console.error("Background: Purchase failed (chrome.runtime.lastError):", chrome.runtime.lastError.message);
+            // Show error to user (e.g., via notification, or update popup UI)
+            chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title: 'Specific Focus - Purchase Issue',
+                message: `There was an issue with the purchase: ${chrome.runtime.lastError.message}. Please try again later.`
+            });
+            return;
+        }
+
+        if (buyResult && buyResult.response && buyResult.response.success) {
+            console.log("Background: Purchase successful! Details:", buyResult);
+
+            // ***** CRITICAL NEXT STEP: Verify purchase with your backend *****
+            // The extension should send buyResult.response.details (JWT for managed product)
+            // or buyResult.request.purchaseToken (for subscriptions) to your backend.
+            // Your backend then validates this with Google's servers.
+            // See: https://developer.chrome.com/docs/webstore/one-time-payments/#verifying-the-payment
+            
+            // Example: (This is a placeholder - you need a backend endpoint for this)
+            // const verificationResponse = await fetch('YOUR_BACKEND_URL/verify-purchase', {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${oauthToken}` },
+            //     body: JSON.stringify({ purchaseDetails: buyResult.response.details }) // or purchaseToken
+            // });
+            // if (verificationResponse.ok) {
+            //     console.log("Background: Backend successfully verified purchase.");
+            //     await chrome.storage.local.set({ isPremiumUser: true }); // Mark as premium locally
+            //     chrome.notifications.create({
+            //         type: 'basic',
+            //         iconUrl: 'icons/icon128.png',
+            //         title: 'Specific Focus - Upgrade Complete!',
+            //         message: 'You are now a premium user! All features unlocked.'
+            //     });
+            //     // Optionally, try to re-process the page that was blocked
+            //     // if (tabId) triggerAnalysisForTab(tabId, "POST_PURCHASE_RETRY");
+            // } else {
+            //     console.error("Background: Backend failed to verify purchase.", await verificationResponse.text());
+            //      chrome.notifications.create({
+            //         type: 'basic',
+            //         iconUrl: 'icons/icon128.png',
+            //         title: 'Specific Focus - Purchase Verification Issue',
+            //         message: 'Your purchase was made, but we had trouble activating it. Please contact support or try reloading the extension.'
+            //     });
+            // }
+            // ********************************************************************
+            
+            // For now, just showing a success notification
+             chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title: 'Specific Focus - Action Required',
+                message: 'Purchase successful! Backend verification is needed to fully activate. This is a placeholder.'
+            });
+
+
+        } else {
+            // This case might include user cancellation or other non-error failures.
+            console.warn("Background: Purchase did not complete successfully or was cancelled. Response:", buyResult);
+             chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title: 'Specific Focus - Purchase Incomplete',
+                message: 'The purchase process was not completed. If you meant to upgrade, please try again.'
+            });
+        }
+
+    } catch (e) {
+        console.error("Background: Error during chrome.payments.buy call:", e);
+        // This catches errors in the buy call itself, not chrome.runtime.lastError for payment system errors.
+         chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon128.png',
+            title: 'Specific Focus - Purchase Error',
+            message: `An unexpected error occurred during the purchase process: ${e.message}`
+        });
+    }
 }
 
 if (currentSessionFocus) {

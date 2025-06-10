@@ -6,12 +6,12 @@
     "permissions": [
       "storage",
       "tabs",
-      "scripting",
       "activeTab",
       "webNavigation",
       "alarms",
       "notifications",
-      "identity"
+      "identity",
+      "payments"
     ],
     "host_permissions": [
       "http://*/*",
@@ -45,7 +45,12 @@
       {
         "matches": ["http://*/*", "https://*/*"],
         "js": ["lib/Readability.js", "content.js"],
-        "run_at": "document_idle"
+        "run_at": "document_idle",
+        "exclude_matches": [
+          "*://localhost/*",
+          "*://127.0.0.1/*",
+          "*://*.local/*"
+        ]
       }
     ],
     "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAptjJmvMg26YN6hfhQiuRXCrcy3IZr2sPQ7dG4iGxG1b3+8UDmjLxX84UAD3M7fQ6yabXcJR/NNOv0qc026d186CdzaKhZQPKh+ZMnbIEgwfyvHe9B84pzF4Dr95DGIB36GFpfP0UzKdnzzJ6Y3hH8GjCHcc30VlkPBpy54yKn3k2sQNhcsVcLBSClM//aIrWtB4BnVMzR+AUs98CiPusUQ4RDiPOsGeU+4WQq8BAk/W1bXePlE1DQ+wkaLgUdtyoQxkIW/oWWtlLkx0+asGFe2gU/Z59SisFK9wuXnL5BEFd8+gHvPma70Qe+AVMKRtAl4oy/Yl0+HmUgMmgtfXc2wIDAQAB"

@@ -4,12 +4,16 @@ let currentUrl = window.location.href; // Tracked URL for comparison
 let activeProcessingToken = null; // To manage concurrent stabilization attempts
 let lastSentUrlTimestamp = {}; // Tracks when an update was last sent for a URL
 
-const STABILIZATION_CHECK_INTERVAL = 300; // ms - How often to check for changes
-const STABILIZATION_MIN_QUIET_PERIOD = 1200; // ms - Increased: How long data must be stable
-const STABILIZATION_MAX_WAIT_TIME = 3000; // ms - Increased slightly: Max time to wait
-const CONTENT_SCRIPT_SEND_COOLDOWN = 7000; // 7 seconds: Min time before re-sending for the same URL
-const HISTORY_DEBOUNCE_DELAY = 700; // ms
-const MUTATION_DEBOUNCE_DELAY = 2000; // ms
+const STABILIZATION_CHECK_INTERVAL = 500; // ms - INCREASED for less CPU usage
+const STABILIZATION_MIN_QUIET_PERIOD = 800; // ms - DECREASED for faster response
+const STABILIZATION_MAX_WAIT_TIME = 2000; // ms - DECREASED for faster response
+const CONTENT_SCRIPT_SEND_COOLDOWN = 5000; // 5 seconds - REDUCED for faster updates
+const HISTORY_DEBOUNCE_DELAY = 400; // ms - REDUCED for faster SPA detection
+const MUTATION_DEBOUNCE_DELAY = 1500; // ms - REDUCED for faster DOM change detection
+
+// PERFORMANCE: Throttle DOM operations
+let lastDOMRead = 0;
+const DOM_READ_THROTTLE = 200; // ms
 
 const FOCUS_MODAL_ID = 'focus-monitor-pro-modal-overlay';
 
@@ -378,7 +382,112 @@ function simpleHash(str) {
     return hash.toString(16);
 }
 
+// INTELLIGENT DOM MONITORING SYSTEM
+// Adaptive timing based on website characteristics
+
+// Base timing constants (starting points)
+const BASE_STABILIZATION_CHECK_INTERVAL = 300;
+const BASE_STABILIZATION_MIN_QUIET_PERIOD = 600;
+const BASE_STABILIZATION_MAX_WAIT_TIME = 1500;
+
+// Adaptive timing (will be calculated per site)
+let adaptiveTimings = {
+    checkInterval: BASE_STABILIZATION_CHECK_INTERVAL,
+    quietPeriod: BASE_STABILIZATION_MIN_QUIET_PERIOD,
+    maxWait: BASE_STABILIZATION_MAX_WAIT_TIME
+};
+
+// AGGRESSIVE TIMING: Optimized for fastest off-focus detection
+const WEBSITE_PATTERNS = {
+    FAST_STATIC: {
+        patterns: [/github\.io/, /docs\./, /wikipedia\.org/, /stackoverflow\.com/, /\.md$/, /readme/i],
+        timings: { checkInterval: 150, quietPeriod: 300, maxWait: 600 }
+    },
+    NEWS_MEDIA: {
+        patterns: [/news/, /\.com\/article/, /blog/, /medium\.com/, /\.html$/, /post\//],
+        timings: { checkInterval: 200, quietPeriod: 400, maxWait: 800 }
+    },
+    ECOMMERCE: {
+        patterns: [/shop/, /store/, /product/, /amazon\.com/, /ebay\.com/, /buy/, /cart/],
+        timings: { checkInterval: 250, quietPeriod: 500, maxWait: 1200 }
+    },
+    SOCIAL_MEDIA: {
+        patterns: [/facebook\.com/, /twitter\.com/, /linkedin\.com/, /reddit\.com/, /social/],
+        timings: { checkInterval: 300, quietPeriod: 600, maxWait: 1000 }
+    },
+    SPA_HEAVY: {
+        patterns: [/app\./, /dashboard/, /admin/, /console/, /webapp/],
+        timings: { checkInterval: 200, quietPeriod: 600, maxWait: 1500 }
+    }
+};
+
+// Content classification for better timing
+function classifyWebsite(url, document) {
+    // Check URL patterns first
+    for (const [category, config] of Object.entries(WEBSITE_PATTERNS)) {
+        if (config.patterns.some(pattern => pattern.test(url))) {
+            console.log(`Content.js: Classified as ${category} based on URL pattern`);
+            return config.timings;
+        }
+    }
+    
+    // Analyze DOM characteristics
+    const hasReactRoot = document.querySelector('#root, #app, [data-reactroot]');
+    const hasAngularApp = document.querySelector('[ng-app], [data-ng-app], app-root');
+    const hasVueApp = document.querySelector('[data-v-]') || document.querySelector('#app')?.__vue__;
+    const hasInfiniteScroll = document.querySelector('[class*="infinite"], [class*="scroll"]');
+    const hasAsyncContent = document.querySelectorAll('script[src*="async"], script[async]').length > 5;
+    
+    // Adaptive classification based on DOM
+    if (hasReactRoot || hasAngularApp || hasVueApp) {
+        console.log('Content.js: Detected SPA framework, using SPA timing');
+        return WEBSITE_PATTERNS.SPA_HEAVY.timings;
+    }
+    
+    if (hasInfiniteScroll) {
+        console.log('Content.js: Detected infinite scroll, using social media timing');
+        return WEBSITE_PATTERNS.SOCIAL_MEDIA.timings;
+    }
+    
+    if (hasAsyncContent) {
+        console.log('Content.js: Heavy async content detected, using ecommerce timing');
+        return WEBSITE_PATTERNS.ECOMMERCE.timings;
+    }
+    
+    // Default to news/media timing
+    console.log('Content.js: Using default news/media timing');
+    return WEBSITE_PATTERNS.NEWS_MEDIA.timings;
+}
+
+// Enhanced content analysis - focus on what matters for focus detection
+function getContentPriority(element) {
+    const tagName = element.tagName?.toLowerCase();
+    const className = element.className || '';
+    
+    // High priority content for focus analysis
+    if (['h1', 'h2', 'h3'].includes(tagName)) return 3;
+    if (['title', 'meta'].includes(tagName)) return 3;
+    if (className.includes('title') || className.includes('heading')) return 3;
+    
+    // Medium priority
+    if (['main', 'article', 'section'].includes(tagName)) return 2;
+    if (className.includes('content') || className.includes('article')) return 2;
+    
+    // Low priority (ads, sidebars, etc.)
+    if (className.includes('ad') || className.includes('sidebar')) return 0;
+    if (className.includes('cookie') || className.includes('banner')) return 0;
+    
+    return 1; // Default priority
+}
+
 function extractPageDataForStabilization() {
+    // PERFORMANCE: Throttle DOM reads
+    const now = Date.now();
+    if (now - lastDOMRead < DOM_READ_THROTTLE) {
+        return { data: null, signature: null }; // Skip this read cycle
+    }
+    lastDOMRead = now;
+    
     const data = {
         url: window.location.href,
         title: document.title,
@@ -388,32 +497,54 @@ function extractPageDataForStabilization() {
     let contentToHash = "";
     const readabilityArticle = getReadabilityArticle(document);
 
-    if (readabilityArticle && readabilityArticle.textContent && readabilityArticle.textContent.trim().length > 50) { // Arbitrary length check
-        // console.log("Content.js: Using Readability for signature content.");
-        contentToHash = readabilityArticle.textContent.substring(0, 1000); // Use a longer snippet from Readability for hashing
+    if (readabilityArticle && readabilityArticle.textContent && readabilityArticle.textContent.trim().length > 50) {
+        // FOCUS OPTIMIZATION: Use only first portion for faster analysis
+        contentToHash = readabilityArticle.textContent.substring(0, 500); // Reduced from 1000
     } else {
-        // Fallback to existing main/article/body logic if Readability fails or content is too short
-        // console.log("Content.js: Readability failed or content too short, falling back for signature.");
+        // SPEED-OPTIMIZED fallback - get key content fast
         let mainContentText = "";
-        const mainElement = document.querySelector('main');
-        if (mainElement) {
-            mainContentText = (mainElement.innerText || "").substring(0, 500);
-        } else {
-            const articleElement = document.querySelector('article');
-            if (articleElement) {
-                mainContentText = (articleElement.innerText || "").substring(0, 500);
-            } else {
-                mainContentText = (document.body?.innerText || "").substring(0, 300);
+        
+        // Aggressive prioritized extraction for fastest analysis
+        const speedSelectors = [
+            'h1',                    // Most important
+            'h2',                    // Second most important  
+            '.title, .headline',     // Common title classes
+            'main article p:first-of-type', // First paragraph in main article
+            'article p:first-of-type',       // First paragraph in article
+            '.content p:first-of-type',      // First paragraph in content
+            'main p:first-of-type',          // First paragraph in main
+            'p'                      // Any paragraph as last resort
+        ];
+        
+        // Quick extraction - take first meaningful content found
+        for (const selector of speedSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.innerText?.trim().length > 20) {
+                mainContentText += element.innerText.trim().substring(0, 150) + ' ';
+                if (mainContentText.length > 200) break; // Stop when we have enough
             }
         }
+        
+        // Ultra-fast fallback if nothing found
+        if (mainContentText.length < 50) {
+            mainContentText = (document.body?.innerText || "").substring(0, 200);
+        }
+        
         contentToHash = mainContentText;
     }
 
     const normalizedContent = contentToHash.trim().replace(/\s+/g, ' ');
     const contentHash = simpleHash(normalizedContent);
     
-    const signature = `${data.title}::${data.metaDescription}::${data.url}::${contentHash}`;
-    // console.log(`Content.js: Stabilization Signature: ${signature}`); 
+    // Enhanced signature includes key page elements
+    const keyElementsHash = simpleHash(
+        data.title + 
+        data.metaDescription + 
+        (document.querySelector('h1')?.innerText || '') +
+        (document.querySelector('h2')?.innerText || '')
+    );
+    
+    const signature = `${data.title}::${data.metaDescription}::${data.url}::${contentHash}::${keyElementsHash}`;
     return { data, signature }; 
 }
 
@@ -453,6 +584,7 @@ function sendUpdateWithExtractedData(pageData, source, details, uniqueRequestId)
     });
 }
 
+// SMART STABILIZATION with progressive analysis
 function initiateStabilizationAndSend(source, details = {}) {
     const currentFullUrl = window.location.href;
 
@@ -463,10 +595,14 @@ function initiateStabilizationAndSend(source, details = {}) {
         return;
     }
 
-    const uniqueRequestId = `CJS-Stab_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    console.log(`Content.js (ID: ${uniqueRequestId}): Initiating stabilization. Source: ${source}. URL: ${currentFullUrl}`);
+    // INTELLIGENT TIMING: Adapt to website characteristics
+    adaptiveTimings = classifyWebsite(currentFullUrl, document);
+    console.log(`Content.js: Using adaptive timings:`, adaptiveTimings);
 
-    // Cancel any previous ongoing stabilization process for this content script instance
+    const uniqueRequestId = `CJS-Stab_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    console.log(`Content.js (ID: ${uniqueRequestId}): Initiating SMART stabilization. Source: ${source}. URL: ${currentFullUrl}`);
+
+    // Cancel any previous ongoing stabilization process
     if (activeProcessingToken) {
         clearTimeout(activeProcessingToken.maxWaitTimeoutId);
         clearInterval(activeProcessingToken.checkIntervalId);
@@ -479,71 +615,114 @@ function initiateStabilizationAndSend(source, details = {}) {
         lastSignature: null,
         lastSignatureTime: Date.now(),
         maxWaitTimeoutId: null,
-        checkIntervalId: null
+        checkIntervalId: null,
+        changeCount: 0  // Track how many changes we've seen
     };
     activeProcessingToken = currentToken;
 
     const performSend = (reason) => {
         if (activeProcessingToken !== currentToken) {
             console.log(`Content.js (ID: ${uniqueRequestId}): Stabilization for this token was cancelled or superseded. Not sending for reason: ${reason}.`);
-            return; // This attempt was superseded
+            return;
         }
-        clearInterval(currentToken.checkIntervalId); // Stop interval checks
-        clearTimeout(currentToken.maxWaitTimeoutId); // Stop max wait timeout
+        
+        // Clean up monitoring
+        clearInterval(currentToken.checkIntervalId);
+        clearTimeout(currentToken.maxWaitTimeoutId);
+        activeProcessingToken = null;
 
-        const finalExtraction = extractPageData(); // Extract full data, including body, just before sending
+        const finalExtraction = extractPageData();
         sendUpdateWithExtractedData(finalExtraction, `${source}_${reason}`, details, uniqueRequestId);
-        activeProcessingToken = null; // Clear the active token
-        lastSentUrlTimestamp[finalExtraction.url] = Date.now(); // Record send time for this URL
+        lastSentUrlTimestamp[finalExtraction.url] = Date.now();
     };
 
+    // FAST-TRACK ANALYSIS: Send as soon as we have minimal viable content
+    const checkMinimalViableContent = () => {
+        if (activeProcessingToken !== currentToken) return false;
+        
+        const quickCheck = extractPageDataForStabilization();
+        if (!quickCheck.signature || !quickCheck.data) return false;
+        
+        const title = quickCheck.data.title || '';
+        const description = quickCheck.data.metaDescription || '';
+        const url = quickCheck.data.url || '';
+        
+        // Criteria for "good enough" analysis - optimized for speed
+        const hasMeaningfulTitle = title.split(' ').filter(w => w.length > 2).length >= 2;
+        const hasDescription = description.length > 15;
+        const hasContentHash = quickCheck.signature.split('::')[3]?.length > 8;
+        const isKnownPattern = url.match(/\.(html|php|jsp|asp)/) || url.includes('/article/') || url.includes('/post/');
+        
+        // Fast-track if we have enough signals for classification
+        if ((hasMeaningfulTitle && hasDescription) || 
+            (hasMeaningfulTitle && hasContentHash) ||
+            (hasDescription && isKnownPattern)) {
+            console.log(`Content.js (ID: ${uniqueRequestId}): Minimal viable content detected. Fast-tracking analysis.`);
+            performSend('FAST_TRACK_VIABLE_CONTENT');
+            return true;
+        }
+        
+        return false;
+    };
+
+    // Aggressive early analysis check - optimized for off-focus detection speed
+    setTimeout(() => {
+        if (activeProcessingToken === currentToken) {
+            checkMinimalViableContent();
+        }
+    }, Math.min(adaptiveTimings.quietPeriod * 0.4, 250)); // Much more aggressive timing
+
+    // Maximum wait timeout with adaptive timing
     currentToken.maxWaitTimeoutId = setTimeout(() => {
-        console.log(`Content.js (ID: ${uniqueRequestId}): Max wait time (${STABILIZATION_MAX_WAIT_TIME}ms) reached. Sending current data.`);
-        performSend('MAX_WAIT');
-    }, STABILIZATION_MAX_WAIT_TIME);
+        console.log(`Content.js (ID: ${uniqueRequestId}): Max wait time (${adaptiveTimings.maxWait}ms) reached. Sending current data.`);
+        performSend('MAX_WAIT_ADAPTIVE');
+    }, adaptiveTimings.maxWait);
 
     const checkStability = () => {
         if (activeProcessingToken !== currentToken) {
             clearInterval(currentToken.checkIntervalId);
-            // console.log(`Content.js (ID: ${uniqueRequestId}): Stability check for token ${currentToken.id} was cancelled or superseded.`);
             return;
         }
 
-        const { signature: newSignature } = extractPageDataForStabilization();
+        const extractResult = extractPageDataForStabilization();
+        if (!extractResult.signature) {
+            return; // Throttled, skip this check
+        }
+        const newSignature = extractResult.signature;
 
         if (newSignature !== currentToken.lastSignature) {
-            // console.log(`Content.js (ID: ${uniqueRequestId}): Content changed. Resetting quiet period. Old: ${currentToken.lastSignature}, New: ${newSignature}`);
+            currentToken.changeCount++;
             currentToken.lastSignature = newSignature;
             currentToken.lastSignatureTime = Date.now();
+            
+            // ADAPTIVE BEHAVIOR: If content is changing rapidly, extend quiet period slightly
+            if (currentToken.changeCount > 5) {
+                const extendedQuietPeriod = Math.min(adaptiveTimings.quietPeriod * 1.3, 1500);
+                console.log(`Content.js (ID: ${uniqueRequestId}): Rapid changes detected (${currentToken.changeCount}), extending quiet period to ${extendedQuietPeriod}ms`);
+                adaptiveTimings.quietPeriod = extendedQuietPeriod;
+            }
         } else {
             const quietDuration = Date.now() - currentToken.lastSignatureTime;
-            if (quietDuration >= STABILIZATION_MIN_QUIET_PERIOD) {
-                console.log(`Content.js (ID: ${uniqueRequestId}): Content stable for ${quietDuration}ms. Sending.`);
-                performSend('STABLE');
-            } else {
-                // console.log(`Content.js (ID: ${uniqueRequestId}): Content stable, but quiet period not met (${quietDuration}ms / ${STABILIZATION_MIN_QUIET_PERIOD}ms).`);
-            }
+                         if (quietDuration >= adaptiveTimings.quietPeriod) {
+                 console.log(`Content.js (ID: ${uniqueRequestId}): Content stable for ${quietDuration}ms (required: ${adaptiveTimings.quietPeriod}ms). Sending single analysis.`);
+                 performSend('STABLE_ADAPTIVE');
+             }
         }
 
-        // Safety break for interval, in case maxWaitTimeoutId failed to clear it
-        if (Date.now() - currentToken.startTime > STABILIZATION_MAX_WAIT_TIME + STABILIZATION_CHECK_INTERVAL * 2) {
-            console.warn(`Content.js (ID: ${uniqueRequestId}): Interval seems to have overran max_wait_time significantly. Clearing for ${currentToken.id}.`);
+        // Safety break for interval
+        if (Date.now() - currentToken.startTime > adaptiveTimings.maxWait + adaptiveTimings.checkInterval * 2) {
+            console.warn(`Content.js (ID: ${uniqueRequestId}): Interval overran max_wait_time. Clearing for ${currentToken.id}.`);
             clearInterval(currentToken.checkIntervalId);
-            if (activeProcessingToken === currentToken) { // If it hasn't already sent via MAX_WAIT
-                 // performSend('INTERVAL_TIMEOUT_SAFETY'); // This might cause double send if MAX_WAIT is about to fire.
-            }
         }
     };
 
     // Initial signature setup
-    const { signature: initialSignature } = extractPageDataForStabilization();
-    currentToken.lastSignature = initialSignature;
+    const initialExtract = extractPageDataForStabilization();
+    currentToken.lastSignature = initialExtract.signature;
     currentToken.lastSignatureTime = Date.now();
-    // console.log(`Content.js (ID: ${uniqueRequestId}): Initial signature for token ${currentToken.id}: ${initialSignature}`);
 
-    currentToken.checkIntervalId = setInterval(checkStability, STABILIZATION_CHECK_INTERVAL);
-    // Initial check, slight delay to allow first signature to be set if page is extremely fast.
-    // setTimeout(checkStability, 50); // Or just rely on the first interval tick.
+    // Start monitoring with adaptive interval
+    currentToken.checkIntervalId = setInterval(checkStability, adaptiveTimings.checkInterval);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
