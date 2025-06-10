@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Successful - Focus Monitor Pro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #66bb6a, #4caf50, #2e7d32);
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #66bb6a, #4caf50);
+            border-radius: 50%;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            color: white;
+            animation: successBounce 0.8s ease-out;
+        }
+
+        @keyframes successBounce {
+            0% { transform: scale(0) rotate(0deg); }
+            50% { transform: scale(1.1) rotate(180deg); }
+            100% { transform: scale(1) rotate(360deg); }
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+            line-height: 1.2;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        .success-card {
+            background: linear-gradient(135deg, #e8f5e8, #f1f8e9);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+            border: 2px solid #c8e6c9;
+        }
+
+        .plan-activated {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2e7d32;
+            margin-bottom: 16px;
+        }
+
+        .next-steps {
+            text-align: left;
+            margin-bottom: 24px;
+        }
+
+        .next-steps h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .step-number {
+            background: #66bb6a;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .step-description {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            flex-direction: column;
+            margin-top: 24px;
+        }
+
+        .btn {
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #66bb6a, #4caf50);
+            color: white;
+            box-shadow: 0 4px 16px rgba(102, 187, 106, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 187, 106, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e9ecef;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+            border-color: #dee2e6;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #ffa726;
+            animation: confetti-fall 3s linear infinite;
+        }
+
+        .confetti:nth-child(1) { left: 10%; animation-delay: 0s; background: #ff6b6b; }
+        .confetti:nth-child(2) { left: 20%; animation-delay: 0.5s; background: #ffa726; }
+        .confetti:nth-child(3) { left: 30%; animation-delay: 1s; background: #66bb6a; }
+        .confetti:nth-child(4) { left: 40%; animation-delay: 1.5s; background: #42a5f5; }
+        .confetti:nth-child(5) { left: 50%; animation-delay: 2s; background: #ab47bc; }
+        .confetti:nth-child(6) { left: 60%; animation-delay: 0.8s; background: #ff6b6b; }
+        .confetti:nth-child(7) { left: 70%; animation-delay: 1.3s; background: #ffa726; }
+        .confetti:nth-child(8) { left: 80%; animation-delay: 0.3s; background: #66bb6a; }
+        .confetti:nth-child(9) { left: 90%; animation-delay: 1.8s; background: #42a5f5; }
+
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-100vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        .support-note {
+            margin-top: 32px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #666;
+            border-left: 4px solid #42a5f5;
+        }
+
+        .support-note strong {
+            color: #333;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 24px;
+                margin: 10px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Confetti animation -->
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+        <div class="confetti"></div>
+
+        <div class="success-icon">✅</div>
+        <h1>Welcome to Pro+!</h1>
+        <p class="subtitle">Your payment was successful and your account has been upgraded.</p>
+
+        <div class="success-card">
+            <div class="plan-activated">Focus Monitor Pro+ Activated</div>
+            <p>You now have unlimited access to all premium features. Your subscription will automatically renew monthly.</p>
+        </div>
+
+        <div class="next-steps">
+            <h3>Next Steps</h3>
+            
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <div class="step-title">Extension Updated</div>
+                    <div class="step-description">Your extension now has unlimited API calls and premium features enabled.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <div class="step-title">Start Focusing</div>
+                    <div class="step-description">Close this tab and start using your unlimited focus monitoring right away.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <div class="step-title">Manage Subscription</div>
+                    <div class="step-description">You can cancel or modify your subscription anytime from the extension popup.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn btn-primary" onclick="window.close()">
+                🚀 Start Focusing Now
+            </button>
+            <a href="https://olliedaly.github.io/specific-focus-extension/privacy.html" class="btn btn-secondary">
+                View Privacy Policy
+            </a>
+        </div>
+
+        <div class="support-note">
+            <strong>💬 Need Help?</strong> If you have any questions or issues, contact us at olliedaly1995@gmail.com. We typically respond within 24 hours.
+        </div>
+    </div>
+
+    <script>
+        // Auto-close tab after 30 seconds if user doesn't interact
+        setTimeout(() => {
+            if (confirm('Close this tab and return to browsing?')) {
+                window.close();
+            }
+        }, 30000);
+
+        // Try to refresh the extension popup if it's open
+        try {
+            if (window.opener && window.opener.chrome && window.opener.chrome.runtime) {
+                window.opener.chrome.runtime.sendMessage({type: 'subscription_updated'});
+            }
+        } catch (e) {
+            // Ignore errors - extension context might not be available
+        }
+    </script>
+</body>
+</html> 

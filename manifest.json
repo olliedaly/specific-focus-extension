@@ -53,8 +53,8 @@
           "*://localhost/*",
           "*://127.0.0.1/*",
           "*://*.local/*",
-          "*://specific-focus-backend-1056415616503.europe-west1.run.app/upgrade*",
-          "*://specific-focus-backend-1056415616503.europe-west1.run.app/payment-success*"
+          "*://olliedaly.github.io/specific-focus-extension/upgrade.html*",
+          "*://olliedaly.github.io/specific-focus-extension/payment-success.html*"
         ]
       }
     ],
