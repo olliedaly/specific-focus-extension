@@ -3,24 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upgrade to Specific Focus Pro</title>
+    <title>Upgrade to Unlimited - Focus Monitor Pro</title>
     <script src="https://js.stripe.com/v3/"></script>
     <style>
-        :root {
-            --rui-bg-primary: #F7F5F2;
-            --rui-bg-card: #FFFFFF;
-            --rui-text-primary: #3A2F28;
-            --rui-text-secondary: #7A6B60;
-            --rui-accent-green: #6A8A7B;
-            --rui-accent-green-hover: #597567;
-            --rui-accent-green-text: #FFFFFF;
-            --rui-border-primary: #E0D8CF;
-            --font-family-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            --border-radius-md: 0.375rem; /* 6px */
-            --shadow-strong: 0 4px 12px rgba(74, 59, 49, 0.12);
-            --transition-common: 0.2s ease-in-out;
-        }
-
         * {
             margin: 0;
             padding: 0;
@@ -28,68 +13,97 @@
         }
 
         body {
-            font-family: var(--font-family-main);
-            background: var(--rui-bg-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
-            color: var(--rui-text-primary);
         }
 
         .container {
-            background: var(--rui-bg-card);
-            border-radius: var(--border-radius-md);
-            box-shadow: var(--shadow-strong);
-            max-width: 450px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
             width: 100%;
             padding: 40px;
             text-align: center;
-            border: 1px solid var(--rui-border-primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff6b6b, #ffa726, #66bb6a, #42a5f5);
         }
 
         .logo {
-            font-size: 48px;
-            margin-bottom: 24px;
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #ff6b6b, #ffa726);
+            border-radius: 16px;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
         }
 
         h1 {
             font-size: 28px;
             font-weight: 700;
+            color: #1a1a1a;
             margin-bottom: 8px;
+            line-height: 1.2;
         }
 
         .subtitle {
             font-size: 16px;
-            color: var(--rui-text-secondary);
+            color: #666;
             margin-bottom: 32px;
+            line-height: 1.5;
         }
 
         .plan-card {
-            background: var(--rui-bg-primary);
-            border-radius: var(--border-radius-md);
+            background: #f8f9fa;
+            border-radius: 12px;
             padding: 24px;
             margin-bottom: 32px;
-            border: 1px solid var(--rui-border-primary);
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+
+        .plan-card:hover {
+            border-color: #ffa726;
+            box-shadow: 0 8px 24px rgba(255, 167, 38, 0.15);
         }
 
         .plan-name {
             font-size: 20px;
             font-weight: 600;
+            color: #1a1a1a;
             margin-bottom: 8px;
         }
 
         .plan-price {
             font-size: 32px;
             font-weight: 700;
-            color: var(--rui-accent-green);
+            color: #ffa726;
             margin-bottom: 16px;
         }
 
         .plan-price .period {
             font-size: 16px;
-            color: var(--rui-text-secondary);
+            color: #666;
             font-weight: 400;
         }
 
@@ -103,36 +117,44 @@
             padding: 8px 0;
             position: relative;
             padding-left: 24px;
+            color: #333;
         }
 
         .features li::before {
             content: '✓';
             position: absolute;
             left: 0;
-            color: var(--rui-accent-green);
+            color: #66bb6a;
             font-weight: bold;
         }
 
         .upgrade-btn {
-            background: var(--rui-accent-green);
-            color: var(--rui-accent-green-text);
+            background: linear-gradient(135deg, #ffa726, #ff8f00);
+            color: white;
             border: none;
             padding: 16px 32px;
-            border-radius: var(--border-radius-md);
+            border-radius: 8px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             width: 100%;
-            transition: background-color var(--transition-common);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(255, 167, 38, 0.3);
         }
 
         .upgrade-btn:hover {
-            background: var(--rui-accent-green-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(255, 167, 38, 0.4);
+        }
+
+        .upgrade-btn:active {
+            transform: translateY(0);
         }
 
         .upgrade-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
         }
 
         .loading {
@@ -146,8 +168,8 @@
         .spinner {
             width: 20px;
             height: 20px;
-            border: 2px solid var(--rui-border-primary);
-            border-top: 2px solid var(--rui-accent-green);
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #ffa726;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -159,19 +181,42 @@
 
         .security-note {
             margin-top: 24px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
             font-size: 14px;
-            color: var(--rui-text-secondary);
+            color: #666;
+            border-left: 4px solid #66bb6a;
+        }
+
+        .security-note strong {
+            color: #333;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 24px;
+                margin: 10px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .plan-price {
+                font-size: 28px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="logo">🧠</div>
-        <h1>Upgrade to Specific Focus Pro</h1>
-        <p class="subtitle">Unlock unlimited focus monitoring and boost your productivity.</p>
+        <div class="logo">🎯</div>
+        <h1>Upgrade to Unlimited</h1>
+        <p class="subtitle">Unlock unlimited focus monitoring and boost your productivity</p>
 
         <div class="plan-card">
-            <div class="plan-name">Specific Focus Pro</div>
+            <div class="plan-name">Focus Monitor Pro+</div>
             <div class="plan-price">$4.99 <span class="period">/ month</span></div>
             
             <ul class="features">
@@ -179,11 +224,11 @@
                 <li>Advanced focus analytics</li>
                 <li>Priority support</li>
                 <li>No daily limits</li>
-                <li>Access to new features first</li>
+                <li>Premium features first</li>
             </ul>
 
             <button class="upgrade-btn" id="upgradeBtn">
-                Upgrade Now
+                Upgrade Now 🚀
             </button>
         </div>
 
@@ -193,7 +238,7 @@
         </div>
 
         <div class="security-note">
-            <strong>🔒 Secure Payment:</strong> Powered by Stripe. Cancel anytime.
+            <strong>🔒 Secure Payment:</strong> Powered by Stripe. Your payment information is encrypted and secure. Cancel anytime from your account.
         </div>
     </div>
 
@@ -212,49 +257,50 @@
         if (!token || !userId) {
             upgradeBtn.textContent = 'Invalid Access';
             upgradeBtn.disabled = true;
-        } else {
-            upgradeBtn.addEventListener('click', async () => {
-                upgradeBtn.disabled = true;
-                loading.style.display = 'flex';
-
-                try {
-                    // Create checkout session via your backend
-                    const response = await fetch('https://specific-focus-backend-1056415616503.europe-west1.run.app/create-checkout-session', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({
-                            user_id: userId,
-                            success_url: 'https://olliedaly.github.io/specific-focus-extension/payment-success.html',
-                            cancel_url: window.location.href
-                        })
-                    });
-
-                    const session = await response.json();
-
-                    if (session.error) {
-                        throw new Error(session.error);
-                    }
-
-                    // Redirect to Stripe Checkout
-                    const result = await stripe.redirectToCheckout({
-                        sessionId: session.id
-                    });
-
-                    if (result.error) {
-                        throw new Error(result.error.message);
-                    }
-
-                } catch (error) {
-                    console.error('Error:', error);
-                    alert('Something went wrong. Please try again.');
-                    upgradeBtn.disabled = false;
-                    loading.style.display = 'none';
-                }
-            });
+            return;
         }
+
+        upgradeBtn.addEventListener('click', async () => {
+            upgradeBtn.disabled = true;
+            loading.style.display = 'flex';
+
+            try {
+                // Create checkout session via your backend
+                const response = await fetch('https://specific-focus-backend-1056415616503.europe-west1.run.app/create-checkout-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        success_url: 'https://olliedaly.github.io/specific-focus-extension/payment-success.html',
+                        cancel_url: window.location.href
+                    })
+                });
+
+                const session = await response.json();
+
+                if (session.error) {
+                    throw new Error(session.error);
+                }
+
+                // Redirect to Stripe Checkout
+                const result = await stripe.redirectToCheckout({
+                    sessionId: session.id
+                });
+
+                if (result.error) {
+                    throw new Error(result.error.message);
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Something went wrong. Please try again.');
+                upgradeBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
     </script>
 </body>
 </html> 

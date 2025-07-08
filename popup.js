@@ -139,11 +139,8 @@ async function updateSubscriptionStatus() {
 
 async function handleUpgradeClick() {
     try {
-        const token = await new Promise((resolve, reject) => {
-            chrome.identity.getAuthToken({interactive: true}, (token) => {
-                if (chrome.runtime.lastError || !token) {
-                    return reject(chrome.runtime.lastError || new Error('Token not available'));
-                }
+        const token = await new Promise((resolve) => {
+            chrome.identity.getAuthToken({interactive: false}, (token) => {
                 resolve(token);
             });
         });
