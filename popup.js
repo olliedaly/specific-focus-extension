@@ -160,7 +160,7 @@ async function handleUpgradeClick() {
         const userId = tokenInfo.sub; // 'sub' is the user ID in Google's token info
 
         // Open upgrade page in new tab (GitHub Pages)
-        const upgradeUrl = `https://olliedaly.github.io/specific-focus-extension/upgrade.html?token=${token}&user_id=${userId}`;
+        const upgradeUrl = `https://specific-focus-backend-1056415616503.europe-west1.run.app/upgrade?token=${token}&user_id=${userId}`;
         chrome.tabs.create({ url: upgradeUrl });
         
     } catch (error) {
