@@ -5,13 +5,11 @@
     "description": "Monitors web pages for relevance to your current focus, with advanced SPA support.",
     "permissions": [
       "storage",
-      "tabs",
       "activeTab",
       "webNavigation",
       "alarms",
       "notifications",
-      "identity",
-      "payments"
+      "identity"
     ],
     "host_permissions": [
       "http://*/*",

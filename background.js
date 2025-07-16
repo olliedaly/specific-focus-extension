@@ -140,9 +140,10 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!sender.tab) return;
     if (message.type === "CONTENT_UPDATED") {
         const sourceDetail = `contentJs[${message.triggeringSource}, ID:${message.contentJsRequestId || 'N/A'}]`;
-        const tabId = sender.tab ? sender.tab.id : 'N/A_TabID';
+        const tabId = sender.tab.id;
         console.log(`Background: Message - CONTENT_UPDATED from ${sourceDetail} for URL: ${message.data.url} (tabId: ${tabId})`);
         if (sender.tab && sender.tab.id) {
              handlePageData(sender.tab.id, message.data, sourceDetail, message.triggeringDetails);

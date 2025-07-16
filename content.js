@@ -28,6 +28,10 @@ const focusQuotes = [
 console.log("Content.js (Observe-Stabilize-Timeout): Script loaded for URL:", window.location.href);
 
 function injectModalStyles() {
+    if (!chrome.runtime.id) {
+        console.warn('Extension context invalidated, skipping injectModalStyles.');
+        return;
+    }
     const styleId = 'focus-monitor-pro-styles';
     if (document.getElementById(styleId)) return;
 
@@ -81,12 +85,15 @@ function injectModalStyles() {
         }
         .${FOCUS_MODAL_ID}-content {
             background-color: var(--rui-bg-card);
-            padding: 20px 24px;
+            padding: 20px 24px 32px;
             border-radius: var(--border-radius-md);
             box-shadow: var(--shadow-strong);
             text-align: left; /* Align text to left for content */
-            max-width: 420px; /* Raindrop modals are often not too wide */
-            width: 90%;
+            width: 420px;
+            max-width: min(90vw, 420px);
+            min-height: 300px;
+            max-height: 80vh;
+            overflow: auto;
             border: 1px solid var(--rui-border-primary);
             transform: scale(0.95) translateY(10px);
             transition: transform var(--transition-common) cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity var(--transition-common);
@@ -119,21 +126,31 @@ function injectModalStyles() {
             border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
         }
         .${FOCUS_MODAL_ID}-content .button-container {
-            margin-top: 20px;
+            margin-top: 24px;
             display: flex;
             flex-direction: row; /* Buttons side-by-side */
-            justify-content: flex-end; /* Align to right */
-            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center; /* Align to right */
+            gap: 12px;
+        }
+        @media (max-width: 480px) {
+            .${FOCUS_MODAL_ID}-content .button-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .${FOCUS_MODAL_ID}-content button {
+                width: calc(100% - 48px);
+            }
         }
         .${FOCUS_MODAL_ID}-content button {
             /* width: 100%; REMOVED - let buttons size naturally with padding and min-width */
-            padding: 10px 18px; /* Increased padding for better touch/click area and text visibility */
-            min-width: 100px; /* Increased min-width */
+            padding: 12px 24px; /* Increased padding for better touch/click area and text visibility */
+            min-width: 120px; /* Increased min-width */
             border: 1px solid transparent;
             border-radius: var(--border-radius-sm);
             cursor: pointer;
             font-weight: 500;
-            font-size: 0.9rem;
+            font-size: 1rem;
             transition: background-color var(--transition-common), border-color var(--transition-common), color var(--transition-common), transform 0.1s ease;
             text-align: center;
         }
@@ -188,16 +205,13 @@ function injectModalStyles() {
     style.id = styleId;
     style.textContent = css;
     document.head.appendChild(style);
-
-    // Trigger fade-in animation
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => { // Double requestAnimationFrame for some browsers
-            overlay.classList.add('visible');
-        });
-    });
 }
 
 function removeOffFocusModal() {
+    if (!chrome.runtime.id) {
+        console.warn('Extension context invalidated, skipping removeOffFocusModal.');
+        return;
+    }
     const existingModal = document.getElementById(FOCUS_MODAL_ID);
     if (existingModal) {
         console.log("Content.js: Removing existing off-focus modal.");
@@ -206,6 +220,14 @@ function removeOffFocusModal() {
 }
 
 function showOffFocusModal(lastRelevantUrl) {
+    if (document.readyState !== 'complete') {
+        setTimeout(() => showOffFocusModal(lastRelevantUrl), 100);
+        return;
+    }
+    if (!chrome.runtime.id) {
+        console.warn('Extension context invalidated, skipping showOffFocusModal.');
+        return;
+    }
     console.log("Content.js: showOffFocusModal called. lastRelevantUrl:", lastRelevantUrl);
     removeOffFocusModal(); // Remove any existing modal first
 
@@ -275,16 +297,27 @@ function showOffFocusModal(lastRelevantUrl) {
         return; // Stop if appending failed
     }
 
-    // Trigger fade-in animation
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => { // Double requestAnimationFrame for some browsers
-            overlay.classList.add('visible');
-        });
-    });
+    // Trigger fade-in animation with delay
+    setTimeout(() => {
+        if (!chrome.runtime.id) return;
+        try {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    overlay.classList.add('visible');
+                });
+            });
+        } catch (e) {
+            console.warn('Animation failed:', e);
+        }
+    }, 100);
 }
 
 // Function to create a common modal structure
 function createBaseModal() {
+    if (!chrome.runtime.id) {
+        console.warn('Extension context invalidated, skipping createBaseModal.');
+        return { overlay: null, modalContent: null };
+    }
     removeOffFocusModal(); // Clear any existing modal
 
     const overlay = document.createElement('div');
@@ -304,6 +337,10 @@ function createBaseModal() {
 }
 
 function showPomodoroBreakModal(breakDuration) {
+    if (!chrome.runtime.id) {
+        console.warn('Extension context invalidated, skipping showPomodoroBreakModal.');
+        return;
+    }
     console.log(`Content.js: showPomodoroBreakModal called. Duration: ${breakDuration} min`);
     const { overlay, modalContent } = createBaseModal();
 
@@ -319,14 +356,26 @@ function showPomodoroBreakModal(breakDuration) {
     // No buttons needed other than the close 'X'
 
     document.body.appendChild(overlay);
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            overlay.classList.add('visible');
-        });
-    });
+    // Trigger fade-in animation with delay
+    setTimeout(() => {
+        if (!chrome.runtime.id) return;
+        try {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    overlay.classList.add('visible');
+                });
+            });
+        } catch (e) {
+            console.warn('Animation failed:', e);
+        }
+    }, 100);
 }
 
 function showPomodoroWorkModal() {
+    if (!chrome.runtime.id) {
+        console.warn('Extension context invalidated, skipping showPomodoroWorkModal.');
+        return;
+    }
     console.log("Content.js: showPomodoroWorkModal called.");
     const { overlay, modalContent } = createBaseModal();
 
@@ -342,11 +391,19 @@ function showPomodoroWorkModal() {
     // No buttons needed other than the close 'X'
 
     document.body.appendChild(overlay);
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            overlay.classList.add('visible');
-        });
-    });
+    // Trigger fade-in animation with delay
+    setTimeout(() => {
+        if (!chrome.runtime.id) return;
+        try {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    overlay.classList.add('visible');
+                });
+            });
+        } catch (e) {
+            console.warn('Animation failed:', e);
+        }
+    }, 100);
 }
 
 // Call injectModalStyles once when the script loads
@@ -573,19 +630,27 @@ function extractPageData() {
 function sendUpdateWithExtractedData(pageData, source, details, uniqueRequestId) {
     // This function actually sends the message
     console.log(`%cContent.js (ID: ${uniqueRequestId}): FINAL SEND. Source: ${source}. URL: ${pageData.url}. Title: ${pageData.title.substring(0,50)}. Details: ${JSON.stringify(details).substring(0,100)}`, "color: green;");
-    chrome.runtime.sendMessage({
-        type: "CONTENT_UPDATED",
-        data: pageData, // This should include the body snippet taken at send time
-        triggeringSource: source,
-        contentJsRequestId: uniqueRequestId,
-        triggeringDetails: details
-    }).catch(error => {
-        console.warn(`Content.js (ID: ${uniqueRequestId}): Error sending message: ${error.message}`);
-    });
+    if (chrome.runtime.id) {
+        chrome.runtime.sendMessage({
+            type: "CONTENT_UPDATED",
+            data: pageData,
+            triggeringSource: source,
+            contentJsRequestId: uniqueRequestId,
+            triggeringDetails: details
+        }).catch(error => {
+            console.warn(`Content.js (ID: ${uniqueRequestId}): Error sending message: ${error.message}`);
+        });
+    } else {
+        console.warn(`Content.js (ID: ${uniqueRequestId}): Extension context invalidated, skipping message send.`);
+    }
 }
 
 // SMART STABILIZATION with progressive analysis
 function initiateStabilizationAndSend(source, details = {}) {
+    if (!chrome.runtime.id) {
+        console.warn('Extension context invalidated, skipping stabilization.');
+        return;
+    }
     const currentFullUrl = window.location.href;
 
     // Check if we recently sent an update for this exact URL from content script
@@ -726,6 +791,7 @@ function initiateStabilizationAndSend(source, details = {}) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!chrome.runtime.id) return true;
     if (message.type === "SHOW_OFF_FOCUS_MODAL") {
         console.log("Content.js: Received SHOW_OFF_FOCUS_MODAL, lastRelevantUrl:", message.lastRelevantUrl);
         showOffFocusModal(message.lastRelevantUrl);
@@ -801,6 +867,10 @@ history.replaceState = function(...args) {
 // MutationObserver to detect dynamic content changes
 let mutationObserver = null;
 function setupMutationObserver() {
+    if (!chrome.runtime.id) {
+        console.warn('Extension context invalidated, skipping MutationObserver setup.');
+        return;
+    }
     if (mutationObserver) {
         mutationObserver.disconnect();
     }
@@ -816,6 +886,10 @@ function setupMutationObserver() {
     let lastObservedTitle = document.title;
 
     mutationObserver = new MutationObserver((mutationsList, observer) => {
+        if (!chrome.runtime.id) {
+            observer.disconnect();
+            return;
+        }
         // More sophisticated check:
         // 1. Check if title changed significantly
         // 2. Check if <main> or <article> content changed substantially (more than just minor text tweaks)
