@@ -140,7 +140,16 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (!sender.tab) return;
+    const popupMessageTypes = [
+        'START_POMODORO_CYCLE',
+        'SESSION_STARTED',
+        'SESSION_ENDED',
+        'PAUSE_SESSION',
+        'RESUME_SESSION',
+        'STOP_POMODORO_CYCLE',
+        'ADD_TO_WHITELIST'
+    ];
+    if (!sender.tab && !popupMessageTypes.includes(message.type)) return;
     if (message.type === "CONTENT_UPDATED") {
         const sourceDetail = `contentJs[${message.triggeringSource}, ID:${message.contentJsRequestId || 'N/A'}]`;
         const tabId = sender.tab.id;
@@ -357,12 +366,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
                 });
 
                 // Simple notification (requires "notifications" permission in manifest)
-                // chrome.notifications.create({
-                //     type: "basic",
-                //     iconUrl: "icons/icon128.png",
-                //     title: "Specific Focus - Pomodoro",
-                //     message: notificationMessage
-                // });
+                chrome.notifications.create({
+                    type: "basic",
+                    iconUrl: "icons/icon128.png",
+                    title: nextMode === 'break' ? 'Time to Rest!' : 'Time to Work!',
+                    message: nextMode === 'break' ? `Work cycle finished! Time for a ${nextDuration}-minute break.` : `Break finished! Time for a ${nextDuration}-minute work session.`
+                });
             });
         } else {
             console.log("Background: Pomodoro alarm fired but state is inconsistent or duration is zero. Stopping cycle.");
@@ -542,6 +551,15 @@ async function handlePageData(tabId, pageData, receivedSource, receivedDetails =
     const url = pageData.url;
     const processingAttemptId = `BJS_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     
+    if (url.includes('checkout.stripe.com') || url.endsWith('/payment-success.html') || url.endsWith('/upgrade.html')) {
+        console.log(`Background: Upgrade-related URL detected: ${url}. Treating as Relevant.`);
+        const upgradeAssessment = 'Relevant';
+        recentAssessmentsCache[url] = { assessment: upgradeAssessment, timestamp: Date.now() };
+        await chrome.storage.local.set({ lastAssessmentText: upgradeAssessment });
+        refreshIconForTab(tabId, upgradeAssessment);
+        return;
+    }
+
     // --- Whitelist Check ---
     const whitelist = await getWhitelist();
     if (whitelist.includes(url)) {
@@ -642,6 +660,20 @@ function updateGlobalCache(url, sessionFocus, assessment) {
 async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSource = "unknown_bjs_trigger", bjsProcessingId = "N/A_bjs_id") {
     console.log(`Background (ID: ${bjsProcessingId}): sendToBackend executing for ${pageContent.url.substring(0,70)}. Original Trigger: ${originalTriggerSource}`);
     
+    const { freeLimitReached, limitHash } = await chrome.storage.local.get(['freeLimitReached', 'limitHash']);
+    if (simpleHash(freeLimitReached.toString()) !== limitHash) {
+        console.warn('Tamper detected - resyncing limit.');
+        await syncFreeLimit();
+    }
+
+    if (freeLimitReached) {
+        console.log(`Background: Free limit reached - skipping backend send for ${pageContent.url}.`);
+        assessmentTextToStore = "Limit Reached";
+        await chrome.storage.local.set({ lastAssessmentText: assessmentTextToStore });
+        refreshIconForTab(tabId, assessmentTextToStore);
+        return;
+    }
+
     // FAST PATH: Check global cache first
     const cachedAssessment = checkGlobalCache(pageContent.url, sessionFocus);
     if (cachedAssessment) {
@@ -734,6 +766,7 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
                 const errorJson = await response.json();
                 errorDetail = errorJson.detail || errorJson; // Use detail if present, otherwise the whole object
                  if (response.status === 402) { // Payment Required
+                    await chrome.storage.local.set({ freeLimitReached: true });
                     console.warn(`Background (ID: ${bjsProcessingId}): API limit reached for ${pageContent.url}. Status 402. Detail:`, errorDetail);
                     // Call handlePaymentRequired, potentially passing tabId or other relevant info
                     handlePaymentRequired(tabId, errorDetail); // Pass tabId if needed for context post-payment
@@ -962,9 +995,30 @@ async function handlePaymentRequired(tabId, errorPayload) {
     }
 }
 
+async function syncFreeLimit() {
+    try {
+        const token = await new Promise(resolve => chrome.identity.getAuthToken({interactive: false}, resolve));
+        if (token) {
+            const response = await fetch('https://specific-focus-backend-1056415616503.europe-west1.run.app/user-status', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const status = await response.json();
+                const limitReached = !status.is_premium && status.api_request_count >= 50;
+                await chrome.storage.local.set({ freeLimitReached: limitReached, limitHash: simpleHash(limitReached.toString()) });
+            }
+        }
+    } catch (e) { console.warn('Sync failed:', e); }
+}
+
+function simpleHash(str) { let hash = 0; for (let i = 0; i < str.length; i++) { hash = (hash << 5) - hash + str.charCodeAt(i); hash |= 0; } return hash.toString(); }
+
 if (currentSessionFocus) {
     console.log("Background: Current session focus active on init. Triggering analysis for current tab.");
     triggerCurrentTabAnalysis("BACKGROUND_SCRIPT_INIT_WITH_FOCUS");
 } else {
     console.log("Background: No session focus on init. Waiting for session to start.");
 }
+
+syncFreeLimit();
+setInterval(syncFreeLimit, 60000); // 1min
