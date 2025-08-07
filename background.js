@@ -298,7 +298,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true; // Indicate async response
     }
-    return true; 
 });
 
 // Pomodoro Alarm Handler
@@ -655,6 +654,7 @@ function updateGlobalCache(url, sessionFocus, assessment) {
 async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSource = "unknown_bjs_trigger", bjsProcessingId = "N/A_bjs_id") {
     console.log(`Background (ID: ${bjsProcessingId}): sendToBackend executing for ${pageContent.url.substring(0,70)}. Original Trigger: ${originalTriggerSource}`);
     
+    let assessmentTextToStore = "Error";
     const { freeLimitReached, limitHash } = await chrome.storage.local.get(['freeLimitReached', 'limitHash']);
     if (simpleHash(freeLimitReached.toString()) !== limitHash) {
         console.warn('Tamper detected - resyncing limit.');
@@ -715,7 +715,6 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
         });
     }
 
-    let assessmentTextToStore = "Error";
     const requestPromise = (async () => {
         activeRequestCount++;
         
