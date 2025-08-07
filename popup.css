@@ -339,3 +339,28 @@ button:active {
     width: auto; 
 }
 */ 
+
+/* Relevance status visual states */
+.session-active-view #relevance.relevant {
+  background-color: #e6f4ea;
+  color: #1e8e3e;
+  border: 1px solid #c8e6c9;
+}
+
+.session-active-view #relevance.irrelevant {
+  background-color: #fde8e9;
+  color: #b3261e;
+  border: 1px solid #f5c2c7;
+}
+
+.session-active-view #relevance.error {
+  background-color: #fff4e5;
+  color: #8a6d3b;
+  border: 1px solid #ffe0b2;
+} 
+
+/* Temporary input error highlighting */
+.input-error-temp {
+  border-color: var(--rui-accent-danger) !important;
+  box-shadow: 0 0 0 2px var(--rui-focus-danger) !important;
+} 

@@ -1,4 +1,4 @@
-const BACKEND_URL = "https://specific-focus-backend-1056415616503.europe-west1.run.app/classify";
+const BACKEND_URL = "https://specific-focus-backend-1056415616503.europe-west1.run.app/classify?model=gemini-2.5-flash-lite";
 let currentSessionFocus = null;
 let lastProcessedUrlTimestamp = {};
 const PROCESS_COOLDOWN = 1500; // ms - REDUCED from 3000ms for faster responsiveness
@@ -37,8 +37,8 @@ const POMODORO_ALARM_NAME_WORK = 'pomodoroWorkAlarm';
 const POMODORO_ALARM_NAME_BREAK = 'pomodoroBreakAlarm';
 
 // Icon dimensions
-const ICON_WIDTH = 48;
-const ICON_HEIGHT = 48;
+// Generate proper size per context for crisp icons (16, 24, 32, 48, 128)
+const ICON_SIZES = [16, 24, 32, 48, 128];
 
 console.log("Background.js: Script loaded/reloaded. Initializing...");
 
@@ -411,30 +411,25 @@ async function loadImageBitmap(path) {
 
 async function generateDynamicIcon(tabId, baseIconPath, overlayIconPath = null) {
     try {
-        const canvas = new OffscreenCanvas(ICON_WIDTH, ICON_HEIGHT);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            console.error("Failed to get canvas context for icon generation.");
-            // Fallback to just setting base icon path
-            chrome.action.setIcon({ path: baseIconPath, tabId });
-            return;
-        }
-
+        // Produce a map of size -> ImageData for crisp rendering at all DPRs
+        const imagesBySize = {};
         const baseImage = await loadImageBitmap(baseIconPath);
-        if (baseImage) {
-            ctx.drawImage(baseImage, 0, 0, ICON_WIDTH, ICON_HEIGHT);
-        }
+        const overlayImage = overlayIconPath ? await loadImageBitmap(overlayIconPath) : null;
 
-        if (overlayIconPath) {
-            const overlayImage = await loadImageBitmap(overlayIconPath);
-            if (overlayImage) {
-                ctx.drawImage(overlayImage, 0, 0, ICON_WIDTH, ICON_HEIGHT); // Assuming overlay is same size
-            }
+        for (const size of ICON_SIZES) {
+            const canvas = new OffscreenCanvas(size, size);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            if (baseImage) ctx.drawImage(baseImage, 0, 0, size, size);
+            if (overlayImage) ctx.drawImage(overlayImage, 0, 0, size, size);
+            imagesBySize[size] = ctx.getImageData(0, 0, size, size);
         }
-        const imageData = ctx.getImageData(0, 0, ICON_WIDTH, ICON_HEIGHT);
-        chrome.action.setIcon({ imageData: imageData, tabId: tabId });
-        // console.log(`Background: Dynamically updated icon for tab ${tabId} with base ${baseIconPath} and overlay ${overlayIconPath || 'none'}`);
-
+        if (Object.keys(imagesBySize).length > 0) {
+            chrome.action.setIcon({ imageData: imagesBySize, tabId });
+        } else if (baseIconPath) {
+            chrome.action.setIcon({ path: baseIconPath, tabId });
+        }
+ 
     } catch (e) {
         console.error("Error generating dynamic icon:", e);
         // Fallback if canvas operations fail
@@ -754,8 +749,7 @@ async function sendToBackend(pageContent, sessionFocus, tabId, originalTriggerSo
                 url: pageContent.url,
                 title: pageContent.title,
                 meta_description: pageContent.metaDescription,
-                meta_keywords: pageContent.metaKeywords,
-                page_text_snippet: pageContent.bodyTextSnippet,
+                page_text_snippet: (pageContent.pageText || '').substring(0, 1000),
                 session_focus: sessionFocus
             })
         });
@@ -900,97 +894,30 @@ function triggerCurrentTabAnalysis(reasonForAnalysis) {
 
 async function handlePaymentRequired(tabId, errorPayload) {
     console.log(`Background: Payment required. Details:`, errorPayload);
-    // Potentially inform the user via a notification or by opening a dedicated "upgrade" page
-    // included in the extension. For now, directly trying the purchase.
-
+    // Open the same upgrade flow as the popup, passing token and userId
     try {
-        const buyResult = await chrome.payments.buy({
-            parameters: {interact: true}, // Allows user interaction
-            sku: PREMIUM_SKU_ID, // The SKU you defined in CWS Dashboard
-            // You might want to pass JWT if your backend generates it for one-time purchases
-            // or if you are verifying with your own server.
-            // For managed products, Google handles a lot.
+        const token = await new Promise((resolve, reject) => {
+            chrome.identity.getAuthToken({ interactive: true }, (tok) => {
+                if (chrome.runtime.lastError || !tok) return reject(chrome.runtime.lastError || new Error('Token not available'));
+                resolve(tok);
+            });
         });
-
-        console.log("Background: chrome.payments.buy response", buyResult);
-
-        if (chrome.runtime.lastError) {
-            console.error("Background: Purchase failed (chrome.runtime.lastError):", chrome.runtime.lastError.message);
-            // Show error to user (e.g., via notification, or update popup UI)
-            chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'icons/icon128.png',
-                title: 'Specific Focus - Purchase Issue',
-                message: `There was an issue with the purchase: ${chrome.runtime.lastError.message}. Please try again later.`
-            });
-            return;
-        }
-
-        if (buyResult && buyResult.response && buyResult.response.success) {
-            console.log("Background: Purchase successful! Details:", buyResult);
-
-            // ***** CRITICAL NEXT STEP: Verify purchase with your backend *****
-            // The extension should send buyResult.response.details (JWT for managed product)
-            // or buyResult.request.purchaseToken (for subscriptions) to your backend.
-            // Your backend then validates this with Google's servers.
-            // See: https://developer.chrome.com/docs/webstore/one-time-payments/#verifying-the-payment
-            
-            // Example: (This is a placeholder - you need a backend endpoint for this)
-            // const verificationResponse = await fetch('YOUR_BACKEND_URL/verify-purchase', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${oauthToken}` },
-            //     body: JSON.stringify({ purchaseDetails: buyResult.response.details }) // or purchaseToken
-            // });
-            // if (verificationResponse.ok) {
-            //     console.log("Background: Backend successfully verified purchase.");
-            //     await chrome.storage.local.set({ isPremiumUser: true }); // Mark as premium locally
-            //     chrome.notifications.create({
-            //         type: 'basic',
-            //         iconUrl: 'icons/icon128.png',
-            //         title: 'Specific Focus - Upgrade Complete!',
-            //         message: 'You are now a premium user! All features unlocked.'
-            //     });
-            //     // Optionally, try to re-process the page that was blocked
-            //     // if (tabId) triggerAnalysisForTab(tabId, "POST_PURCHASE_RETRY");
-            // } else {
-            //     console.error("Background: Backend failed to verify purchase.", await verificationResponse.text());
-            //      chrome.notifications.create({
-            //         type: 'basic',
-            //         iconUrl: 'icons/icon128.png',
-            //         title: 'Specific Focus - Purchase Verification Issue',
-            //         message: 'Your purchase was made, but we had trouble activating it. Please contact support or try reloading the extension.'
-            //     });
-            // }
-            // ********************************************************************
-            
-            // For now, just showing a success notification
-             chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'icons/icon128.png',
-                title: 'Specific Focus - Action Required',
-                message: 'Purchase successful! Backend verification is needed to fully activate. This is a placeholder.'
-            });
-
-
-        } else {
-            // This case might include user cancellation or other non-error failures.
-            console.warn("Background: Purchase did not complete successfully or was cancelled. Response:", buyResult);
-             chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'icons/icon128.png',
-                title: 'Specific Focus - Purchase Incomplete',
-                message: 'The purchase process was not completed. If you meant to upgrade, please try again.'
-            });
-        }
-
+        const tokenInfoUrl = `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`;
+        const response = await fetch(tokenInfoUrl);
+        const tokenInfo = await response.json();
+        if (tokenInfo.error) throw new Error('Invalid token');
+        const userId = tokenInfo.sub;
+        const { backendUrl } = await chrome.storage.local.get('backendUrl');
+        const base = backendUrl || 'https://specific-focus-backend-1056415616503.europe-west1.run.app';
+        const upgradeUrl = `${base}/upgrade?token=${token}&user_id=${userId}`;
+        chrome.tabs.create({ url: upgradeUrl });
     } catch (e) {
-        console.error("Background: Error during chrome.payments.buy call:", e);
-        // This catches errors in the buy call itself, not chrome.runtime.lastError for payment system errors.
-         chrome.notifications.create({
+        console.error('Background: Error opening upgrade page after limit:', e);
+        chrome.notifications.create({
             type: 'basic',
             iconUrl: 'icons/icon128.png',
-            title: 'Specific Focus - Purchase Error',
-            message: `An unexpected error occurred during the purchase process: ${e.message}`
+            title: 'Specific Focus - Upgrade Needed',
+            message: 'We hit the free limit. Please open the popup and tap Upgrade to continue.'
         });
     }
 }
